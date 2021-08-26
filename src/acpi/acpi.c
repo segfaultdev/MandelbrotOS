@@ -66,6 +66,12 @@ void *get_table(char *signature, int index) {
 void gather_madt() {
   madt = get_table("APIC", 0);
 
+  if (!madt) {
+    klog(1, "Failed to get MADT. Halting!");
+    while (1)
+      ;
+  }
+
   madt_ioapics = kmalloc(sizeof(madt_ioapic_t *));
   madt_lapics = kmalloc(sizeof(madt_lapic_t *));
   madt_nmis = kmalloc(sizeof(madt_nmi_t *));
@@ -113,6 +119,13 @@ void gather_madt() {
 
 int init_acpi(struct stivale2_struct_tag_rsdp *rsdp_info) {
   rsdp = (rsdp_t *)rsdp_info->rsdp;
+
+  if (!rsdp->rsdt_address) {
+    klog(1, "Failed to get MADT. Halting!");
+    while (1)
+      ;
+  }
+
   rsdt = (rsdt_t *)(rsdp->rsdt_address + PHYS_MEM_OFFSET);
 
   if (rsdp->revision >= 2)

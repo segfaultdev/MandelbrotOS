@@ -3,28 +3,34 @@
 #include <boot/stivale2.h>
 #include <cpu_locals.h>
 #include <drivers/apic.h>
+#include <drivers/pcspkr.h>
 #include <drivers/pit.h>
+#include <drivers/serial.h>
 #include <lock.h>
 #include <mm/kheap.h>
 #include <mm/pmm.h>
+#include <mm/vmm.h>
 #include <printf.h>
 #include <registers.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/gdt.h>
 #include <sys/irq.h>
 #include <tasking/scheduler.h>
 
 #define ALIVE 0
 #define DEAD 1
 
-size_t current_tid = 0;
-size_t current_pid = 0;
+int sched_started = 0;
 
 size_t thread_count = 0;
 size_t proc_count = 0;
 
-thread_t *current_thread;
+size_t current_tid = 0;
+size_t current_pid = 0;
+
+thread_t *threads;
 proc_t *processes;
 
 void k_idle() {
@@ -32,236 +38,68 @@ void k_idle() {
     ;
 }
 
-proc_t *get_proc_by_pid(size_t pid) {
-  for (size_t i = 0; i < proc_count; i++) {
-    if (processes->pid == pid)
-      return processes;
-    processes = processes->next;
-  }
-  return NULL;
-}
+size_t get_next_thread(size_t offset) {
+  size_t index = offset + 1;
 
-thread_t *get_thread_by_pid(size_t tid) {
-  thread_t *dup = current_thread;
-  for (size_t i = 0; i < thread_count; i++) {
-    if (dup->tid == tid)
-      return dup;
-    dup = dup->next;
-  }
-  return NULL;
-}
+  while (1) {
+    if (index >= thread_count)
+      index = 0;
 
-size_t create_kernel_thread(uintptr_t addr, char *name, size_t pid,
-                            size_t priority) {
-  thread_t *thread = kcalloc(sizeof(thread_t));
-  proc_t *proc = get_proc_by_pid(pid);
+    thread_t thread = threads[index];
 
-  if (!thread || !proc)
-    return -1;
+    if (thread.state == ALIVE && !thread.running)
+      return index;
 
-  *thread = (thread_t){
-      .tid = current_tid++,
-      .exit_state = -1,
-      .state = ALIVE,
-      .name = name,
-      .run_once = 0,
-      .running = 0,
-      .mother_proc = proc,
-      .registers =
-          (registers_t){
-              .cs = 0x08,
-              .ss = 0x10,
-              .rip = (uint64_t)addr,
-              .rflags = 0x202,
-              .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
-          },
-      .next = current_thread->next,
-      .prev = current_thread,
-      .priority = priority,
-  };
-
-  if (!thread->registers.rsp) {
-    kfree(thread);
-    return -1;
-  }
-
-  MAKE_LOCK(add_thread_lock);
-
-  thread_count++;
-  thread->next->prev = thread;
-  current_thread->next = thread;
-
-  proc->thread_count++;
-
-  proc->tids[proc->thread_count++] = thread->tid;
-  size_t *tids_re = kmalloc(sizeof(size_t) * (proc->thread_count + 1));
-  memcpy(tids_re, proc->tids, (sizeof(size_t) * proc->thread_count));
-  kfree(proc->tids);
-  proc->tids = tids_re;
-
-  UNLOCK(add_thread_lock);
-
-  return thread->tid;
-}
-
-size_t create_user_thread(uintptr_t addr, char *name, size_t pid,
-                          size_t priority) {
-  thread_t *thread = kcalloc(sizeof(thread_t));
-  proc_t *proc = get_proc_by_pid(pid);
-
-  if (!thread || !proc)
-    return -1;
-
-  *thread = (thread_t){
-      .tid = current_tid++,
-      .exit_state = -1,
-      .state = ALIVE,
-      .name = name,
-      .run_once = 0,
-      .running = 0,
-      .mother_proc = proc,
-      .registers =
-          (registers_t){
-              .cs = 0x1b,
-              .ss = 0x23,
-              .rip = (uint64_t)addr,
-              .rflags = 0x202,
-              .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
-          },
-      .next = current_thread->next,
-      .prev = current_thread,
-      .priority = priority,
-  };
-
-  if (!thread->registers.rsp) {
-    kfree(thread);
-    return -1;
-  }
-
-  MAKE_LOCK(add_thread_lock);
-
-  thread_count++;
-  thread->next->prev = thread;
-  current_thread->next = thread;
-
-  proc->thread_count++;
-
-  proc->tids[proc->thread_count++] = thread->tid;
-  size_t *tids_re = kmalloc(sizeof(size_t) * (proc->thread_count + 1));
-  memcpy(tids_re, proc->tids, (sizeof(size_t) * proc->thread_count));
-  kfree(proc->tids);
-  proc->tids = tids_re;
-
-  UNLOCK(add_thread_lock);
-
-  return thread->tid;
-}
-
-size_t create_proc(char *name) {
-  proc_t *proc = kcalloc(sizeof(proc_t));
-
-  if (!proc)
-    return -1;
-
-  proc->thread_count = 0;
-  proc->name = name;
-  proc->pid = current_pid++;
-  proc->tids = kmalloc(sizeof(size_t));
-
-  if (!proc->tids) {
-    kfree(proc);
-    return -1;
-  }
-
-  MAKE_LOCK(proc_lock);
-
-  proc_count++;
-  proc->next = processes->next;
-  proc->next->prev = proc;
-  proc->prev = processes;
-  processes->next = proc;
-
-  UNLOCK(proc_lock);
-
-  return proc->pid;
-}
-
-void kill_thread(size_t tid) {
-  thread_t *cp = current_thread;
-
-  MAKE_LOCK(thread_kill_lock);
-
-  for (size_t i = 0; i < thread_count; i++) {
-    if (cp->tid == tid) {
-      cp->mother_proc->thread_count--;
-
-      kfree((void *)cp->registers.rsp);
-      kfree(cp);
-
-      cp->prev->next = cp->next;
-      cp->next->prev = cp->prev;
-
-      thread_count--;
-
+    if (index == offset)
       break;
-    }
-    cp = cp->next;
+
+    index++;
   }
 
-  UNLOCK(thread_kill_lock);
-}
-
-void kill_proc(size_t pid) {
-  MAKE_LOCK(proc_kill_lock);
-
-  for (size_t i = 0; i < proc_count; i++) {
-    if (processes->pid == pid) {
-      for (size_t j = 0; j < processes->thread_count; j++)
-        kill_thread(processes->tids[i]);
-
-      kfree(processes->tids);
-      kfree(processes);
-
-      processes->prev->next = processes->next;
-      processes->next->prev = processes->prev;
-
-      proc_count--;
-
-      break;
-    }
-    processes->prev->next = processes->next;
-  }
-
-  UNLOCK(proc_kill_lock);
+  return -1;
 }
 
 void schedule(uint64_t rsp) {
   MAKE_LOCK(sched_lock);
 
-  current_thread->running = 0;
+  cpu_locals_t *locals = get_locals();
 
-  if (current_thread->run_once)
-    memcpy(&current_thread->registers, (registers_t *)rsp, sizeof(registers_t));
-  else
-    current_thread->run_once = 1;
+  size_t index = get_next_thread(locals->last_run_tid);
 
-  thread_t *old_thread = current_thread;
-
-  for (size_t i = 0; i < thread_count; i++) {
-    current_thread = current_thread->next;
-    if (current_thread->running == 0 && current_thread != old_thread &&
-        current_thread->state == ALIVE)
-      goto run_thread;
+  if (index == locals->last_run_tid) {
+    lapic_eoi();
+    lapic_timer_oneshot(SCHEDULE_REG, threads[index].priority);
+    return;
   }
 
-  current_thread = old_thread;
+  if (threads[locals->last_run_tid].run_once)
+    threads[locals->last_run_tid].registers = *(registers_t *)rsp;
+  else
+    threads[locals->last_run_tid].run_once = 1;
 
-run_thread:
-  current_thread->running = 1;
+  uint64_t cr3;
+  asm volatile("mov %%cr3, %0" : "=r"(cr3));
+  threads[locals->last_run_tid].pagemap = (uint64_t *)cr3;
+
+  threads[locals->last_run_tid].running = 0;
+
+  if (index == (size_t)-1) {
+    printf("no");
+    while (1)
+      ;
+  }
+
+  threads[index].running = 1;
+  
+  if (cr3 != (uint64_t)threads[index].pagemap)
+    asm volatile("mov %0, %%cr3" : "=r"(cr3));
+
+  locals->last_run_tid = index;
+
   UNLOCK(sched_lock);
 
   lapic_eoi();
-  lapic_timer_oneshot(SCHEDULE_REG, current_thread->priority);
+  lapic_timer_oneshot(SCHEDULE_REG, threads[index].priority);
 
   asm volatile("mov %0, %%rsp\n"
                "pop %%r15\n"
@@ -282,22 +120,53 @@ run_thread:
                "add $16, %%rsp\n"
                "iretq\n"
                :
-               : "r"(&current_thread->registers)
+               : "r"(&threads[index].registers)
                : "memory");
 }
 
-void scheduler_init(uintptr_t addr) {
-  processes = kcalloc(sizeof(proc_t));
-  current_thread = kcalloc(sizeof(thread_t));
+void await() {
+  while (LOCKED_READ(sched_started) == 0)
+    ;
 
-  *processes = (proc_t){
+  asm volatile("cli");
+
+  lapic_timer_oneshot(SCHEDULE_REG, 20);
+
+  asm volatile("1:\n"
+               "sti\n"
+               "hlt\n"
+               "jmp 1b\n");
+}
+
+void test() {
+  while (1) {
+    char x[6];
+    x[0] = '2';
+    x[1] = ':';
+    x[2] = ' ';
+    x[3] = get_locals()->cpu_number + '0';
+    x[4] = '\n';
+    x[5] = 0;
+    serial_print(x);
+    /* pcspkr_tone_on(1000); */
+    for (volatile size_t i = 0; i < 5000000; i++)
+      asm volatile("nop");
+    /* pcspkr_tone_off(); */
+  }
+}
+
+void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
+  processes = kcalloc(sizeof(proc_t));
+  threads = kcalloc(sizeof(thread_t) * 4);
+
+  processes[0] = (proc_t){
       .name = "kproc",
       .thread_count = 1,
-      .tids = kmalloc(sizeof(size_t) * 2),
+      .threads = kmalloc(sizeof(thread_t) * 2),
       .pid = current_pid++,
   };
 
-  *current_thread = (thread_t){
+  threads[0] = (thread_t){
       .tid = current_tid++,
       .exit_state = -1,
       .state = ALIVE,
@@ -314,23 +183,79 @@ void scheduler_init(uintptr_t addr) {
               .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
           },
       .priority = 1,
-      .next = NULL,
+      .pagemap = get_kernel_pagemap(),
+  };
+
+  threads[1] = (thread_t){
+      .tid = current_tid++,
+      .exit_state = -1,
+      .state = ALIVE,
+      .name = "k_test",
+      .run_once = 0,
+      .running = 0,
+      .mother_proc = processes,
+      .registers =
+          (registers_t){
+              .cs = 0x08,
+              .ss = 0x10,
+              .rip = (uint64_t)test,
+              .rflags = 0x202,
+              .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
+          },
+      .priority = 1,
+      .pagemap = get_kernel_pagemap(),
+  };
+
+    threads[2] = (thread_t){
+      .tid = current_tid++,
+      .exit_state = -1,
+      .state = ALIVE,
+      .name = "k_test",
+      .run_once = 0,
+      .running = 0,
+      .mother_proc = processes,
+      .registers =
+          (registers_t){
+              .cs = 0x08,
+              .ss = 0x10,
+              .rip = (uint64_t)k_idle,
+              .rflags = 0x202,
+              .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
+          },
+      .priority = 1,
+      .pagemap = get_kernel_pagemap(),
+  };
+
+    threads[3] = (thread_t){
+      .tid = current_tid++,
+      .exit_state = -1,
+      .state = ALIVE,
+      .name = "k_test",
+      .run_once = 0,
+      .running = 0,
+      .mother_proc = processes,
+      .registers =
+          (registers_t){
+              .cs = 0x08,
+              .ss = 0x10,
+              .rip = (uint64_t)k_idle,
+              .rflags = 0x202,
+              .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
+          },
+      .priority = 1,
+      .pagemap = get_kernel_pagemap(),
   };
 
   proc_count++;
-  processes->next = processes;
-  processes->prev = processes;
-  processes->tids[0] = current_thread->tid;
+  processes->threads[0] = threads[0];
 
-  thread_count++;
-  current_thread->next = current_thread;
-  current_thread->prev = current_thread;
+  thread_count += 4;
 
   irq_install_handler(SCHEDULE_REG - 32, schedule);
-  lapic_timer_oneshot(SCHEDULE_REG, current_thread->priority);
 
-  asm volatile("sti");
+  sched_started = 1;
 
+  await();
   while (1)
     ;
 }

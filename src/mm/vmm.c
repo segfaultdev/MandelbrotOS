@@ -53,6 +53,8 @@ void vmm_switch_map_to_kern() {
   asm volatile("mov %0, %%cr3" : : "r"(kernel_pagemap));
 }
 
+uint64_t *get_kernel_pagemap() { return kernel_pagemap; }
+
 int init_vmm() {
   kernel_pagemap = (uint64_t *)pcalloc(1);
 

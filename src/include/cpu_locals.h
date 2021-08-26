@@ -4,12 +4,13 @@
 #include <asm.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <tasking/scheduler.h>
+#include <sys/gdt.h>
 
 typedef struct cpu_locals {
-  size_t current_tid;
+  size_t last_run_tid;
   size_t cpu_number;
   size_t lapic_id;
+  tss_entry_t tss;
 } cpu_locals_t;
 
 static inline cpu_locals_t *get_locals() {

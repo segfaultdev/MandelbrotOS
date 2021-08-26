@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-// Based on lyre-os' spinlock system. 
+// Based on lyre-os' spinlock system.
 
 typedef struct {
   uint32_t waiting_refcount;
@@ -38,7 +38,7 @@ typedef struct {
     ret;                                                                       \
   })
 
-#define SPINLOCK_ACQUIRE(LOCK)                                                 \
+#define LOCK(LOCK)                                                             \
   ({                                                                           \
     int ret;                                                                   \
     LOCKED_INC((LOCK).waiting_refcount);                                       \
@@ -56,24 +56,10 @@ typedef struct {
     !ret;                                                                      \
   })
 
-#define LOCK_ACQUIRE(LOCK)                                                     \
-  ({                                                                           \
-    int ret;                                                                   \
-    asm volatile("lock btsl $0, %0"                                            \
-                 : "+m"((LOCK).bits), "=@ccc"(ret)                             \
-                 :                                                             \
-                 : "memory");                                                  \
-    !ret;                                                                      \
-  })
-
-#define LOCK_RELEASE(LOCK)                                                     \
+#define UNLOCK(LOCK)                                                           \
   ({ asm volatile("lock btrl $0, %0" : "+m"((LOCK).bits) : : "memory"); })
 
 #define DECLARE_LOCK(name) static volatile lock_t name
-
-#define LOCK(name) SPINLOCK_ACQUIRE(name)
-
-#define UNLOCK(name) LOCK_RELEASE(name)
 
 #define MAKE_LOCK(name)                                                        \
   DECLARE_LOCK(name);                                                          \

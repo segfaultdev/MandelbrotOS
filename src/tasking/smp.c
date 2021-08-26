@@ -27,16 +27,19 @@ void core_init(struct stivale2_smp_info *smp_info) {
 
   cpu_locals_t *local = kcalloc(sizeof(cpu_locals_t));
   local->cpu_number = smp_info->extra_argument;
+  local->last_run_tid = 0;
   local->lapic_id = smp_info->lapic_id;
   set_locals(local);
 
-  LOCKED_INC(inited_cpus);
-  klog(3, "Brought up cpu #%lu\r\n", smp_info->extra_argument);
+  load_tss((uintptr_t)&local->tss);
 
-  asm volatile("1:\n"
-               "sti\n"
-               "hlt\n"
-               "jmp 1b\n");
+  local->tss.rsp0 = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET;
+  local->tss.ist1 = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET;
+
+  klog(3, "Brought up cpu #%lu\r\n", smp_info->extra_argument);
+  LOCKED_INC(inited_cpus);
+
+  await();
 }
 
 int init_smp(struct stivale2_struct_tag_smp *smp_info) {
@@ -46,8 +49,14 @@ int init_smp(struct stivale2_struct_tag_smp *smp_info) {
     if (smp_info->smp_info[i].lapic_id == bsp_lapic_id) {
       cpu_locals_t *local = kcalloc(sizeof(cpu_locals_t));
       local->cpu_number = i;
+      local->last_run_tid = 0;
       local->lapic_id = bsp_lapic_id;
       set_locals(local);
+
+      load_tss((uintptr_t)&local->tss);
+
+      local->tss.rsp0 = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET;
+      local->tss.ist1 = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET;
 
       klog(3, "Brought up cpu #%lu\r\n", i);
       LOCKED_INC(inited_cpus);

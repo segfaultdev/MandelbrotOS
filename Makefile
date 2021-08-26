@@ -6,12 +6,14 @@ AS = nasm
 
 # QEMU = qemu-system-$(ARCH) -hdd $(HDD) -smp 1 -M q35 -soundhw pcspk -serial stdio
 QEMU = qemu-system-$(ARCH) -hdd $(HDD) -smp 2 -M q35 -soundhw pcspk -serial stdio
+# QEMU = qemu-system-$(ARCH) -hdd $(HDD) -smp 2 -M q35 -soundhw pcspk -monitor stdio -d int
+
 QEMU_DOCKER = $(QEMU) -curses
 
 HDD = mandelbrotos.hdd
 KERNEL = $(BUILD_DIRECTORY)/mandelbrotos.elf
 
-ASFLAGS = -f elf64 -O3
+ASFLAGS = -f elf64 -g
 
 CFLAGS := \
 	-mcmodel=kernel \
@@ -22,7 +24,7 @@ CFLAGS := \
 	-Werror \
 	-lm \
 	-std=gnu99 \
-	-O3 \
+	-g \
 	-Isrc/include \
 	-mgeneral-regs-only \
 	-mno-red-zone \

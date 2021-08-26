@@ -7,14 +7,14 @@
 #include <boot/stivale2.h>
 #include <registers.h>
 
+struct thread;
+
 typedef struct proc {
   char *name;
   int status;
-  size_t thread_count;
   size_t pid;
-  size_t *tids;
-  struct proc *next;
-  struct proc *prev;
+  size_t thread_count;
+  struct thread *threads;
 } proc_t;
 
 typedef struct thread {
@@ -23,19 +23,14 @@ typedef struct thread {
   int exit_state;
   int run_once;
   int running;
+  uint64_t *pagemap;
   size_t tid;
   size_t priority;
   proc_t *mother_proc;
   registers_t registers;
-  struct thread *next;
-  struct thread *prev;
 } thread_t;
 
-void scheduler_init(uintptr_t addr);
-
-size_t create_user_thread(uintptr_t addr, char *name, size_t pid,
-                          size_t priority);
-size_t create_kernel_thread(uintptr_t addr, char *name, size_t pid,
-                            size_t priority);
+void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr);
+void await();
 
 #endif
