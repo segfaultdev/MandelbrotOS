@@ -93,7 +93,7 @@ void kernel_main(struct stivale2_struct *bootloader_info) {
   klog(init_heap(), "Heap");
   klog(init_acpi(rsdp_info), "ACPI");
   klog(init_smp(smp_info), "SMP");
-  serial_print("Thread: core");
+  serial_print("Thread: core\n");
 
   scheduler_init(smp_info, (uintptr_t)k_thread);
 

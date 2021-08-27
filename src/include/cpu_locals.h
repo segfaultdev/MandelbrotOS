@@ -7,7 +7,7 @@
 #include <sys/gdt.h>
 
 typedef struct cpu_locals {
-  size_t last_run_tid;
+  size_t last_run_thread;
   size_t cpu_number;
   size_t lapic_id;
   tss_entry_t tss;

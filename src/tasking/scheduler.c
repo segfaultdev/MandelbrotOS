@@ -38,90 +38,62 @@ void k_idle() {
     ;
 }
 
+extern void switch_thread(registers_t *regs);
+
 size_t get_next_thread(size_t offset) {
-  size_t index = offset + 1;
-
+  /* MAKE_LOCK(get_next_thread_lock); */
   while (1) {
-    if (index >= thread_count)
-      index = 0;
+    if (offset < thread_count - 1)
+      offset++;
+    else
+      offset = 0;
 
-    thread_t thread = threads[index];
+    thread_t next_thread = threads[offset];
 
-    if (thread.state == ALIVE && !thread.running)
-      return index;
-
-    if (index == offset)
-      break;
-
-    index++;
+    if (LOCKED_READ(next_thread.state) == ALIVE &&
+        !LOCKED_READ(next_thread.running)) {
+      threads[offset].running = 1;
+      /* UNLOCK(get_next_thread_lock); */
+      return offset;
+    }
   }
-
-  return -1;
 }
 
 void schedule(uint64_t rsp) {
-  MAKE_LOCK(sched_lock);
+  /* MAKE_LOCK(sched_lock); */
 
   cpu_locals_t *locals = get_locals();
 
-  size_t index = get_next_thread(locals->last_run_tid);
+  size_t index = get_next_thread(locals->last_run_thread);
 
-  if (index == locals->last_run_tid) {
-    lapic_eoi();
-    lapic_timer_oneshot(SCHEDULE_REG, threads[index].priority);
-    return;
-  }
+  /* if (index == locals->last_run_thread) { */
+  /* lapic_eoi(); */
+  /* lapic_timer_oneshot(SCHEDULE_REG, threads[index].priority); */
+  /* return; */
+  /* } */
 
-  if (threads[locals->last_run_tid].run_once)
-    threads[locals->last_run_tid].registers = *(registers_t *)rsp;
-  else
-    threads[locals->last_run_tid].run_once = 1;
+  if (threads[locals->last_run_thread].run_once) {
+    threads[locals->last_run_thread].registers = *(registers_t *)rsp;
+  } else
+    threads[locals->last_run_thread].run_once = 1;
 
   uint64_t cr3;
   asm volatile("mov %%cr3, %0" : "=r"(cr3));
-  threads[locals->last_run_tid].pagemap = (uint64_t *)cr3;
+  threads[locals->last_run_thread].pagemap = (uint64_t *)cr3;
 
-  threads[locals->last_run_tid].running = 0;
+  threads[locals->last_run_thread].running = 0;
 
-  if (index == (size_t)-1) {
-    printf("no");
-    while (1)
-      ;
-  }
-
-  threads[index].running = 1;
-  
   if (cr3 != (uint64_t)threads[index].pagemap)
-    asm volatile("mov %0, %%cr3" : "=r"(cr3));
+    asm volatile("mov %0, %%cr3" : : "r"(threads[index].pagemap));
 
-  locals->last_run_tid = index;
-
-  UNLOCK(sched_lock);
+  locals->last_run_thread = index;
 
   lapic_eoi();
   lapic_timer_oneshot(SCHEDULE_REG, threads[index].priority);
 
-  asm volatile("mov %0, %%rsp\n"
-               "pop %%r15\n"
-               "pop %%r14\n"
-               "pop %%r13\n"
-               "pop %%r12\n"
-               "pop %%r11\n"
-               "pop %%r10\n"
-               "pop %%r9\n"
-               "pop %%r8\n"
-               "pop %%rbp\n"
-               "pop %%rdi\n"
-               "pop %%rsi\n"
-               "pop %%rdx\n"
-               "pop %%rcx\n"
-               "pop %%rbx\n"
-               "pop %%rax\n"
-               "add $16, %%rsp\n"
-               "iretq\n"
-               :
-               : "r"(&threads[index].registers)
-               : "memory");
+  /* UNLOCK(sched_lock); */
+
+  switch_thread(&threads[index].registers);
 }
 
 void await() {
@@ -206,7 +178,7 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
       .pagemap = get_kernel_pagemap(),
   };
 
-    threads[2] = (thread_t){
+  threads[2] = (thread_t){
       .tid = current_tid++,
       .exit_state = -1,
       .state = ALIVE,
@@ -226,7 +198,7 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
       .pagemap = get_kernel_pagemap(),
   };
 
-    threads[3] = (thread_t){
+  threads[3] = (thread_t){
       .tid = current_tid++,
       .exit_state = -1,
       .state = ALIVE,

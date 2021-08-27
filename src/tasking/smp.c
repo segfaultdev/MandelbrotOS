@@ -27,7 +27,7 @@ void core_init(struct stivale2_smp_info *smp_info) {
 
   cpu_locals_t *local = kcalloc(sizeof(cpu_locals_t));
   local->cpu_number = smp_info->extra_argument;
-  local->last_run_tid = 0;
+  local->last_run_thread = 0;
   local->lapic_id = smp_info->lapic_id;
   set_locals(local);
 
@@ -49,7 +49,7 @@ int init_smp(struct stivale2_struct_tag_smp *smp_info) {
     if (smp_info->smp_info[i].lapic_id == bsp_lapic_id) {
       cpu_locals_t *local = kcalloc(sizeof(cpu_locals_t));
       local->cpu_number = i;
-      local->last_run_tid = 0;
+      local->last_run_thread = 0;
       local->lapic_id = bsp_lapic_id;
       set_locals(local);
 

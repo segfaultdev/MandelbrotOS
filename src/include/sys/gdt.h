@@ -38,7 +38,8 @@ typedef struct tss_entry {
   uint64_t ist6;
   uint64_t ist7;
   uint64_t reserved2;
-  uint32_t iobp;
+  uint16_t reserved3;
+  uint16_t iobp;
 } __attribute__((packed)) tss_entry_t;
 
 void load_tss(uintptr_t addr);
