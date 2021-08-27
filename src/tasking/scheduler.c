@@ -66,11 +66,11 @@ void schedule(uint64_t rsp) {
 
   size_t index = get_next_thread(locals->last_run_thread);
 
-  /* if (index == locals->last_run_thread) { */
-  /* lapic_eoi(); */
-  /* lapic_timer_oneshot(SCHEDULE_REG, threads[index].priority); */
-  /* return; */
-  /* } */
+  if (index == locals->last_run_thread) {
+    lapic_eoi();
+    lapic_timer_oneshot(SCHEDULE_REG, threads[index].priority);
+    return;
+  }
 
   if (threads[locals->last_run_thread].run_once) 
     memcpy(&threads[locals->last_run_thread].registers, (registers_t *)rsp, sizeof(registers_t));
@@ -97,12 +97,16 @@ void schedule(uint64_t rsp) {
 }
 
 void await() {
-  while (LOCKED_READ(sched_started) == 0)
-    ;
+  MAKE_LOCK(await_lock);
 
   asm volatile("cli");
+  
+  while (!LOCKED_READ(sched_started))
+    ;
 
-  lapic_timer_oneshot(SCHEDULE_REG, 20);
+  lapic_timer_oneshot(SCHEDULE_REG, 200);
+
+  UNLOCK(await_lock);
 
   asm volatile("1:\n"
                "sti\n"
