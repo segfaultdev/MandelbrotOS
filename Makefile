@@ -19,6 +19,7 @@ CFLAGS := \
 	-mcmodel=kernel \
 	-ffreestanding \
 	-Isrc/include \
+	-Werror \
 	-Wall \
 	-Wextra \
 	-lm \

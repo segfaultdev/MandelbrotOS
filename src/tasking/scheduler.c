@@ -72,9 +72,9 @@ void schedule(uint64_t rsp) {
   /* return; */
   /* } */
 
-  if (threads[locals->last_run_thread].run_once) {
-    threads[locals->last_run_thread].registers = *(registers_t *)rsp;
-  } else
+  if (threads[locals->last_run_thread].run_once) 
+    memcpy(&threads[locals->last_run_thread].registers, (registers_t *)rsp, sizeof(registers_t));
+  else
     threads[locals->last_run_thread].run_once = 1;
 
   uint64_t cr3;
@@ -154,7 +154,7 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
               .rflags = 0x202,
               .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
           },
-      .priority = 1,
+      .priority = 100,
       .pagemap = get_kernel_pagemap(),
   };
 
@@ -174,7 +174,7 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
               .rflags = 0x202,
               .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
           },
-      .priority = 1,
+      .priority = 100,
       .pagemap = get_kernel_pagemap(),
   };
 
@@ -194,7 +194,7 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
               .rflags = 0x202,
               .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
           },
-      .priority = 1,
+      .priority = 100,
       .pagemap = get_kernel_pagemap(),
   };
 
@@ -214,7 +214,7 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
               .rflags = 0x202,
               .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
           },
-      .priority = 1,
+      .priority = 100,
       .pagemap = get_kernel_pagemap(),
   };
 
