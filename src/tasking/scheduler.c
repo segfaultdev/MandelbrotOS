@@ -41,72 +41,67 @@ void k_idle() {
 extern void switch_thread(registers_t *regs);
 
 size_t get_next_thread(size_t offset) {
-  /* MAKE_LOCK(get_next_thread_lock); */
   while (1) {
     if (offset < thread_count - 1)
       offset++;
     else
       offset = 0;
 
-    thread_t next_thread = threads[offset];
-
-    if (LOCKED_READ(next_thread.state) == ALIVE &&
-        !LOCKED_READ(next_thread.running)) {
+    if (LOCKED_READ(threads[offset].state) == ALIVE &&
+        !LOCKED_READ(threads[offset].running)) {
       threads[offset].running = 1;
-      /* UNLOCK(get_next_thread_lock); */
       return offset;
     }
   }
 }
 
 void schedule(uint64_t rsp) {
-  /* MAKE_LOCK(sched_lock); */
-
   cpu_locals_t *locals = get_locals();
 
   size_t index = get_next_thread(locals->last_run_thread);
 
   if (index == locals->last_run_thread) {
     lapic_eoi();
-    lapic_timer_oneshot(SCHEDULE_REG, threads[index].priority);
+    lapic_timer_oneshot(SCHEDULE_REG, LOCKED_READ(threads[index].priority));
     return;
   }
 
-  if (threads[locals->last_run_thread].run_once) 
+  if (LOCKED_READ(threads[locals->last_run_thread].run_once)) {
+    /* MAKE_LOCK(write_thread_lock); */
     memcpy(&threads[locals->last_run_thread].registers, (registers_t *)rsp, sizeof(registers_t));
+    /* UNLOCK(write_thread_lock); */
+  }
   else
-    threads[locals->last_run_thread].run_once = 1;
+    LOCKED_WRITE(threads[locals->last_run_thread].run_once, 1);
 
   uint64_t cr3;
   asm volatile("mov %%cr3, %0" : "=r"(cr3));
-  threads[locals->last_run_thread].pagemap = (uint64_t *)cr3;
+  LOCKED_WRITE(threads[locals->last_run_thread].pagemap, (uint64_t *)cr3);
 
-  threads[locals->last_run_thread].running = 0;
+  LOCKED_WRITE(threads[locals->last_run_thread].running, 0);
 
-  if (cr3 != (uint64_t)threads[index].pagemap)
-    asm volatile("mov %0, %%cr3" : : "r"(threads[index].pagemap));
+  if (cr3 != (uint64_t)LOCKED_READ(threads[index].pagemap))
+    asm volatile("mov %0, %%cr3" : : "r"(LOCKED_READ(threads[index].pagemap)));
 
   locals->last_run_thread = index;
 
   lapic_eoi();
-  lapic_timer_oneshot(SCHEDULE_REG, threads[index].priority);
+  lapic_timer_oneshot(SCHEDULE_REG, LOCKED_READ(threads[index].priority));
 
-  /* UNLOCK(sched_lock); */
+  /* MAKE_LOCK(get_next_thread_regs_lock); */
+  registers_t *regs = &threads[index].registers;
+  /* UNLOCK(get_next_thread_regs_lock); */
 
-  switch_thread(&threads[index].registers);
+  switch_thread(regs);
 }
 
 void await() {
-  MAKE_LOCK(await_lock);
-
   asm volatile("cli");
   
   while (!LOCKED_READ(sched_started))
     ;
 
-  lapic_timer_oneshot(SCHEDULE_REG, 200);
-
-  UNLOCK(await_lock);
+  lapic_timer_oneshot(SCHEDULE_REG, 1);
 
   asm volatile("1:\n"
                "sti\n"
@@ -133,7 +128,7 @@ void test() {
 
 void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
   processes = kcalloc(sizeof(proc_t));
-  threads = kcalloc(sizeof(thread_t) * 4);
+  threads = kcalloc(sizeof(thread_t) * 6);
 
   processes[0] = (proc_t){
       .name = "kproc",
@@ -222,10 +217,50 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
       .pagemap = get_kernel_pagemap(),
   };
 
+  threads[4] = (thread_t){
+      .tid = current_tid++,
+      .exit_state = -1,
+      .state = ALIVE,
+      .name = "k_test",
+      .run_once = 0,
+      .running = 0,
+      .mother_proc = processes,
+      .registers =
+          (registers_t){
+              .cs = 0x08,
+              .ss = 0x10,
+              .rip = (uint64_t)k_idle,
+              .rflags = 0x202,
+              .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
+          },
+      .priority = 100,
+      .pagemap = get_kernel_pagemap(),
+  };
+
+  threads[5] = (thread_t){
+      .tid = current_tid++,
+      .exit_state = -1,
+      .state = ALIVE,
+      .name = "k_test",
+      .run_once = 0,
+      .running = 0,
+      .mother_proc = processes,
+      .registers =
+          (registers_t){
+              .cs = 0x08,
+              .ss = 0x10,
+              .rip = (uint64_t)k_idle,
+              .rflags = 0x202,
+              .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
+          },
+      .priority = 100,
+      .pagemap = get_kernel_pagemap(),
+  };
+
   proc_count++;
   processes->threads[0] = threads[0];
 
-  thread_count += 4;
+  thread_count += 6;
 
   irq_install_handler(SCHEDULE_REG - 32, schedule);
 
