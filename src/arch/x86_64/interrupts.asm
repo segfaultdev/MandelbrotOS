@@ -138,5 +138,16 @@ IRQ 12
 IRQ 13
 IRQ 14
 IRQ 15
-IRQ 16
+
+global schedule_irq
+
+extern schedule
+
+schedule_irq:
+  cli
+  push 0
+  push 16
+  pushaq
+  mov rdi, rsp
+  call schedule
 

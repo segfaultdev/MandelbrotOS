@@ -61,7 +61,7 @@ void lapic_timer_get_freq() {
   outb(0x40, (uint8_t)(divisor & 0xFF));
   outb(0x40, (uint8_t)((divisor >> 8) & 0xFF));
 
-  lapic_write(LAPIC_REG_TIMER_DIV, 0x3);
+  lapic_write(LAPIC_REG_TIMER_DIV, 0);
   lapic_write(LAPIC_REG_TIMER_INITCNT, 0xFFFFFFFF);
 
   outb(0x43, 0x30);
@@ -87,7 +87,6 @@ void lapic_timer_oneshot(uint8_t intr, uint32_t ms) {
 
   lapic_write(LAPIC_REG_TIMER, intr);
   lapic_write(LAPIC_REG_TIMER_DIV, 0);
-  lapic_write(LAPIC_REG_TIMER_CURCNT, 0);
   lapic_write(LAPIC_REG_TIMER_INITCNT, ticks);
 }
 

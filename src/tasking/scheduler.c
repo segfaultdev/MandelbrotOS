@@ -38,8 +38,6 @@ void k_idle() {
     ;
 }
 
-extern void switch_thread(registers_t *regs);
-
 size_t get_next_thread(size_t offset) {
   while (1) {
     if (offset < thread_count - 1)
@@ -49,7 +47,7 @@ size_t get_next_thread(size_t offset) {
 
     if (LOCKED_READ(threads[offset].state) == ALIVE &&
         !LOCKED_READ(threads[offset].running)) {
-      threads[offset].running = 1;
+      LOCKED_WRITE(threads[offset].running, 1);
       return offset;
     }
   }
@@ -66,11 +64,8 @@ void schedule(uint64_t rsp) {
     return;
   }
 
-  if (LOCKED_READ(threads[locals->last_run_thread].run_once)) {
-    /* MAKE_LOCK(write_thread_lock); */
-    memcpy(&threads[locals->last_run_thread].registers, (registers_t *)rsp, sizeof(registers_t));
-    /* UNLOCK(write_thread_lock); */
-  }
+  if (LOCKED_READ(threads[locals->last_run_thread].run_once))
+    threads[locals->last_run_thread].registers = *((registers_t *)rsp);
   else
     LOCKED_WRITE(threads[locals->last_run_thread].run_once, 1);
 
@@ -88,20 +83,37 @@ void schedule(uint64_t rsp) {
   lapic_eoi();
   lapic_timer_oneshot(SCHEDULE_REG, LOCKED_READ(threads[index].priority));
 
-  /* MAKE_LOCK(get_next_thread_regs_lock); */
-  registers_t *regs = &threads[index].registers;
-  /* UNLOCK(get_next_thread_regs_lock); */
-
-  switch_thread(regs);
+  asm volatile("mov %0, %%rsp\n"
+               "pop %%r15\n"
+               "pop %%r14\n"
+               "pop %%r13\n"
+               "pop %%r12\n"
+               "pop %%r11\n"
+               "pop %%r10\n"
+               "pop %%r9\n"
+               "pop %%r8\n"
+               "pop %%rbp\n"
+               "pop %%rdi\n"
+               "pop %%rsi\n"
+               "pop %%rdx\n"
+               "pop %%rcx\n"
+               "pop %%rbx\n"
+               "pop %%rax\n"
+               "add $16, %%rsp\n"
+               "iretq\n"
+               :
+               : "r"(&threads[index].registers)
+               : "memory");
+  while (1);
 }
 
 void await() {
   asm volatile("cli");
-  
+
   while (!LOCKED_READ(sched_started))
     ;
 
-  lapic_timer_oneshot(SCHEDULE_REG, 1);
+  lapic_timer_oneshot(SCHEDULE_REG, 20);
 
   asm volatile("1:\n"
                "sti\n"
@@ -262,7 +274,7 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
 
   thread_count += 6;
 
-  irq_install_handler(SCHEDULE_REG - 32, schedule);
+  /* irq_install_handler(SCHEDULE_REG - 32, schedule); */
 
   sched_started = 1;
 
