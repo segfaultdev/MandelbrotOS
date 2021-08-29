@@ -39,6 +39,8 @@ void k_idle() {
 }
 
 size_t get_next_thread(size_t offset) {
+  MAKE_LOCK(get_lock);
+
   while (1) {
     if (offset < thread_count - 1)
       offset++;
@@ -48,6 +50,7 @@ size_t get_next_thread(size_t offset) {
     if (LOCKED_READ(threads[offset].state) == ALIVE &&
         !LOCKED_READ(threads[offset].running)) {
       LOCKED_WRITE(threads[offset].running, 1);
+      UNLOCK(get_lock);
       return offset;
     }
   }
@@ -55,7 +58,7 @@ size_t get_next_thread(size_t offset) {
 
 void schedule(uint64_t rsp) {
   cpu_locals_t *locals = get_locals();
-
+  
   size_t index = get_next_thread(locals->last_run_thread);
 
   if (index == locals->last_run_thread) {
@@ -68,7 +71,7 @@ void schedule(uint64_t rsp) {
     threads[locals->last_run_thread].registers = *((registers_t *)rsp);
   else
     LOCKED_WRITE(threads[locals->last_run_thread].run_once, 1);
-
+  
   uint64_t cr3;
   asm volatile("mov %%cr3, %0" : "=r"(cr3));
   LOCKED_WRITE(threads[locals->last_run_thread].pagemap, (uint64_t *)cr3);
@@ -82,6 +85,8 @@ void schedule(uint64_t rsp) {
 
   lapic_eoi();
   lapic_timer_oneshot(SCHEDULE_REG, LOCKED_READ(threads[index].priority));
+
+  registers_t* regs = &threads[index].registers;
 
   asm volatile("mov %0, %%rsp\n"
                "pop %%r15\n"
@@ -102,18 +107,21 @@ void schedule(uint64_t rsp) {
                "add $16, %%rsp\n"
                "iretq\n"
                :
-               : "r"(&threads[index].registers)
-               : "memory");
-  while (1);
+               : "m"(regs));
+  while(1);
 }
 
 void await() {
+  MAKE_LOCK(test_lock);
+
   asm volatile("cli");
 
   while (!LOCKED_READ(sched_started))
     ;
 
   lapic_timer_oneshot(SCHEDULE_REG, 20);
+
+  UNLOCK(test_lock);
 
   asm volatile("1:\n"
                "sti\n"
