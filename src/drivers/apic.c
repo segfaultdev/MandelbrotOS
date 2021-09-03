@@ -58,15 +58,17 @@ void init_lapic() { lapic_enable(0xff); }
 void lapic_timer_get_freq() {
   uint16_t divisor = 1193180 / 1000;
   outb(0x43, 0x36);
-  outb(0x40, (uint8_t)(divisor & 0xFF));
-  outb(0x40, (uint8_t)((divisor >> 8) & 0xFF));
+  outb(0x40, divisor & 0xFF);
+  outb(0x40, (divisor >> 8) & 0xFF);
 
   lapic_write(LAPIC_REG_TIMER_DIV, 0);
   lapic_write(LAPIC_REG_TIMER_INITCNT, 0xFFFFFFFF);
 
+  uint16_t sleep_ms = 1000;
+
   outb(0x43, 0x30);
-  outb(0x40, (uint8_t)((uint16_t)((1000) & 0xFF)));
-  outb(0x40, (uint8_t)((((uint16_t)(1000 >> 8) & 0xFF))));
+  outb(0x40, sleep_ms & 0xff);
+  outb(0x40, (sleep_ms >> 8) & 0xff);
   while (pit_read_count() > 0)
     ;
 

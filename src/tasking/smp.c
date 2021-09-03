@@ -23,11 +23,10 @@ void core_init(struct stivale2_smp_info *smp_info) {
   load_gdt();
   load_idt();
   vmm_switch_map_to_kern();
-  init_lapic();
 
   cpu_locals_t *local = kcalloc(sizeof(cpu_locals_t));
   local->cpu_number = smp_info->extra_argument;
-  local->last_run_thread = 0;
+  local->last_run_thread_index = 0;
   local->lapic_id = smp_info->lapic_id;
   set_locals(local);
 
@@ -39,6 +38,8 @@ void core_init(struct stivale2_smp_info *smp_info) {
   klog(3, "Brought up cpu #%lu\r\n", smp_info->extra_argument);
   LOCKED_INC(inited_cpus);
 
+  init_lapic();
+
   await();
 }
 
@@ -49,7 +50,7 @@ int init_smp(struct stivale2_struct_tag_smp *smp_info) {
     if (smp_info->smp_info[i].lapic_id == bsp_lapic_id) {
       cpu_locals_t *local = kcalloc(sizeof(cpu_locals_t));
       local->cpu_number = i;
-      local->last_run_thread = 0;
+      local->last_run_thread_index = 0;
       local->lapic_id = bsp_lapic_id;
       set_locals(local);
 

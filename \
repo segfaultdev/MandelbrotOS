@@ -33,8 +33,6 @@ size_t current_pid = 0;
 thread_t **threads;
 proc_t **processes;
 
-lock_t sched_lock = {0};
-
 void k_idle() {
   while (1)
     ;
@@ -42,84 +40,70 @@ void k_idle() {
 
 extern void switch_and_run_stack(uintptr_t stack);
 
-/* size_t get_next_thread(size_t offset) { */
-/* while (1) { */
-/* if (offset < thread_count - 1) */
-/* offset++; */
-/* else */
-/* offset = 0; */
+size_t get_next_thread(size_t offset) {
+  MAKE_LOCK(get_lock);
 
-/* thread_t *current_thread = LOCKED_READ(threads[offset]); */
-
-/* if (LOCK_ACQUIRE(current_thread->lock)) { */
-/* return offset; */
-/* } */
-/* } */
-/* } */
-
-thread_t *get_next_thread(size_t *index) {
-  size_t i = *index + 1;
   while (1) {
-    if (i == thread_count)
-      i = 0;
+    if (offset < thread_count - 1)
+      offset++;
+    else
+      offset = 0;
 
-    thread_t *thread = LOCKED_READ(threads[i]);
-    if (LOCK_ACQUIRE(thread->lock)) {
-      *index = i;
-      return thread;
+    thread_t *current_thread = LOCKED_READ(threads[offset]);
+
+    if (current_thread->state == ALIVE && !current_thread->running) {
+      LOCKED_WRITE(threads[offset]->running, 1);
+      UNLOCK(get_lock);
+      return offset;
     }
-
-    i++;
   }
 }
 
 void schedule(uint64_t rsp) {
   cpu_locals_t *locals = get_locals();
 
-  if (!LOCK_ACQUIRE(sched_lock))
-    await();
+  size_t index = get_next_thread(locals->last_run_thread);
 
-  thread_t *current_thread = locals->current_thread;
-
-  if (!current_thread) {
-    locals->current_thread = get_next_thread(&locals->last_run_thread_index);
-    current_thread = locals->current_thread;
-  }
+  thread_t *next_thread = LOCKED_READ(threads[index]);
+  thread_t *current_thread = LOCKED_READ(threads[locals->last_run_thread]);
 
   if (current_thread->run_once)
     current_thread->registers = *((registers_t *)rsp);
   else
     current_thread->run_once = 1;
 
-  UNLOCK(current_thread->lock);
+  uint64_t cr3;
+  asm volatile("mov %%cr3, %0" : "=r"(cr3));
+  current_thread->pagemap = (uint64_t *)cr3;
 
-  locals->current_thread = get_next_thread(&locals->last_run_thread_index);
-  current_thread = locals->current_thread;
+  asm volatile("mov %0, %%cr3" : : "r"(next_thread->pagemap));
 
-  /* uint64_t cr3; */
-  /* asm volatile("mov %%cr3, %0" : "=r"(cr3)); */
-  /* current_thread->pagemap = (uint64_t *)cr3; */
-
-  /* asm volatile("mov %0, %%cr3" : : "r"(next_thread->pagemap)); */
-
-  UNLOCK(sched_lock);
+  locals->last_run_thread = index;
 
   lapic_eoi();
-  lapic_timer_oneshot(SCHEDULE_REG, current_thread->priority);
+  lapic_timer_oneshot(SCHEDULE_REG, next_thread->priority);
+  
+  current_thread->running = 0;
 
-  switch_and_run_stack((uintptr_t)&current_thread->registers);
+  switch_and_run_stack((uintptr_t)&next_thread->registers);
 }
 
 void await() {
+  /* MAKE_LOCK(test_lock); */
+
+  asm volatile("cli");
+
   while (!LOCKED_READ(sched_started))
     ;
 
-  lapic_timer_oneshot(SCHEDULE_REG, 20);
+  lapic_timer_oneshot(SCHEDULE_REG, 200);
 
-  asm volatile("sti");
+  /* UNLOCK(test_lock); */
 
-  while (1)
-    asm volatile("hlt");
+  asm volatile("1:\n"
+               "sti\n"
+               "hlt\n"
+               "jmp 1b\n");
 }
 
 void test() {
@@ -158,6 +142,7 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
       .state = ALIVE,
       .name = "k_init",
       .run_once = 0,
+      .running = 0,
       .mother_proc = processes[0],
       .registers =
           (registers_t){
@@ -178,6 +163,7 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
       .state = ALIVE,
       .name = "k_test",
       .run_once = 0,
+      .running = 0,
       .mother_proc = processes[0],
       .registers =
           (registers_t){
@@ -198,6 +184,7 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
       .state = ALIVE,
       .name = "k_test",
       .run_once = 0,
+      .running = 0,
       .mother_proc = processes[0],
       .registers =
           (registers_t){
@@ -218,6 +205,7 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
       .state = ALIVE,
       .name = "k_test",
       .run_once = 0,
+      .running = 0,
       .mother_proc = processes[0],
       .registers =
           (registers_t){
@@ -238,6 +226,7 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
       .state = ALIVE,
       .name = "k_test",
       .run_once = 0,
+      .running = 0,
       .mother_proc = processes[0],
       .registers =
           (registers_t){
@@ -258,6 +247,7 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
       .state = ALIVE,
       .name = "k_test",
       .run_once = 0,
+      .running = 0,
       .mother_proc = processes[0],
       .registers =
           (registers_t){
@@ -280,4 +270,6 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
   sched_started = 1;
 
   await();
+  while (1)
+    ;
 }

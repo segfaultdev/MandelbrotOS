@@ -5,11 +5,13 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/gdt.h>
+#include <tasking/scheduler.h>
 
 typedef struct cpu_locals {
-  size_t last_run_thread;
+  size_t last_run_thread_index;
   size_t cpu_number;
   size_t lapic_id;
+  thread_t *current_thread;
   tss_entry_t tss;
 } cpu_locals_t;
 

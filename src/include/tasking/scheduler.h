@@ -7,6 +7,8 @@
 #include <boot/stivale2.h>
 #include <registers.h>
 
+#include <lock.h>
+
 struct thread;
 
 typedef struct proc {
@@ -14,15 +16,15 @@ typedef struct proc {
   int status;
   size_t pid;
   size_t thread_count;
-  struct thread *threads;
+  struct thread **threads;
 } proc_t;
 
 typedef struct thread {
   char *name;
   int state;
+  lock_t lock;
   int exit_state;
   int run_once;
-  int running;
   uint64_t *pagemap;
   size_t tid;
   size_t priority;

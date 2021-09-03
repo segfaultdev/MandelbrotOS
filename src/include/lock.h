@@ -38,6 +38,16 @@ typedef struct {
     ret;                                                                       \
   })
 
+#define LOCK_ACQUIRE(LOCK)                                                     \
+  ({                                                                           \
+    int ret;                                                                   \
+    asm volatile("lock btsl $0, %0"                                            \
+                 : "+m"((LOCK).bits), "=@ccc"(ret)                             \
+                 :                                                             \
+                 : "memory");                                                  \
+    !ret;                                                                      \
+  })
+
 #define LOCK(LOCK)                                                             \
   ({                                                                           \
     int ret;                                                                   \
