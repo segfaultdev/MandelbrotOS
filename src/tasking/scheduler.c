@@ -42,49 +42,49 @@ void k_idle() {
 
 extern void switch_and_run_stack(uintptr_t stack);
 
-/* size_t get_next_thread(size_t offset) { */
-/* while (1) { */
-/* if (offset < thread_count - 1) */
-/* offset++; */
-/* else */
-/* offset = 0; */
-
-/* thread_t *current_thread = LOCKED_READ(threads[offset]); */
-
-/* if (LOCK_ACQUIRE(current_thread->lock)) { */
-/* return offset; */
-/* } */
-/* } */
-/* } */
-
-thread_t *get_next_thread(size_t *index) {
-  size_t i = *index + 1;
+size_t get_next_thread(size_t offset) {
   while (1) {
-    if (i == thread_count)
-      i = 0;
+    if (offset < thread_count - 1)
+      offset++;
+    else
+      offset = 0;
 
-    thread_t *thread = LOCKED_READ(threads[i]);
-    if (LOCK_ACQUIRE(thread->lock)) {
-      *index = i;
-      return thread;
+    thread_t *current_thread = LOCKED_READ(threads[offset]);
+
+    if (LOCK_ACQUIRE(current_thread->lock)) {
+      return offset;
     }
-
-    i++;
   }
 }
+
+/* thread_t *get_next_thread(size_t *index) { */
+  /* size_t i = *index + 1; */
+  /* while (1) { */
+    /* if (i == thread_count) */
+      /* i = 0; */
+
+    /* thread_t *thread = LOCKED_READ(threads[i]); */
+    /* if (LOCK_ACQUIRE(thread->lock)) { */
+      /* *index = i; */
+      /* return thread; */
+    /* } */
+
+    /* i++; */
+  /* } */
+/* } */
 
 void schedule(uint64_t rsp) {
   cpu_locals_t *locals = get_locals();
 
-  if (!LOCK_ACQUIRE(sched_lock))
-    await();
+  /* if (!LOCK_ACQUIRE(sched_lock)) */
+    /* await(); */
 
-  thread_t *current_thread = locals->current_thread;
+  thread_t *current_thread = threads[locals->last_run_thread_index];
 
-  if (!current_thread) {
-    locals->current_thread = get_next_thread(&locals->last_run_thread_index);
-    current_thread = locals->current_thread;
-  }
+  /* if (!current_thread) { */
+    /* locals->current_thread = get_next_thread(&locals->last_run_thread_index); */
+    /* current_thread = locals->current_thread; */
+  /* } */
 
   if (current_thread->run_once)
     current_thread->registers = *((registers_t *)rsp);
@@ -93,8 +93,11 @@ void schedule(uint64_t rsp) {
 
   UNLOCK(current_thread->lock);
 
-  locals->current_thread = get_next_thread(&locals->last_run_thread_index);
-  current_thread = locals->current_thread;
+  locals->last_run_thread_index = get_next_thread(locals->last_run_thread_index);
+  current_thread = threads[locals->last_run_thread_index];
+
+  /* locals->current_thread = get_next_thread(&locals->last_run_thread_index); */
+  /* current_thread = locals->current_thread; */
 
   /* uint64_t cr3; */
   /* asm volatile("mov %%cr3, %0" : "=r"(cr3)); */
@@ -102,7 +105,7 @@ void schedule(uint64_t rsp) {
 
   /* asm volatile("mov %0, %%cr3" : : "r"(next_thread->pagemap)); */
 
-  UNLOCK(sched_lock);
+  /* UNLOCK(sched_lock); */
 
   lapic_eoi();
   lapic_timer_oneshot(SCHEDULE_REG, current_thread->priority);
