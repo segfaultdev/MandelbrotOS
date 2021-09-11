@@ -74,17 +74,24 @@ size_t get_next_thread(size_t offset) {
 /* } */
 
 void schedule(uint64_t rsp) {
+  lapic_timer_stop();
+
   cpu_locals_t *locals = get_locals();
 
-  /* if (!LOCK_ACQUIRE(sched_lock)) */
+  /* if (!LOCK(sched_lock)) */
     /* await(); */
 
   thread_t *current_thread = threads[locals->last_run_thread_index];
 
-  /* if (!current_thread) { */
-    /* locals->current_thread = get_next_thread(&locals->last_run_thread_index); */
-    /* current_thread = locals->current_thread; */
-  /* } */
+  size_t new_index = get_next_thread(locals->last_run_thread_index);
+
+  if (new_index == locals->last_run_thread_index) {
+    lapic_eoi();
+    lapic_timer_oneshot(SCHEDULE_REG, current_thread->priority);
+    asm volatile("sti");
+    while (1)
+      asm volatile("hlt");
+  } 
 
   if (current_thread->run_once)
     current_thread->registers = *((registers_t *)rsp);
@@ -93,8 +100,9 @@ void schedule(uint64_t rsp) {
 
   UNLOCK(current_thread->lock);
 
-  locals->last_run_thread_index = get_next_thread(locals->last_run_thread_index);
+  locals->last_run_thread_index = new_index;
   current_thread = threads[locals->last_run_thread_index];
+  /* printf("%lu: %lu\r\n", locals->last_run_thread_index, locals->cpu_number); */
 
   /* locals->current_thread = get_next_thread(&locals->last_run_thread_index); */
   /* current_thread = locals->current_thread; */
@@ -117,7 +125,9 @@ void await() {
   while (!LOCKED_READ(sched_started))
     ;
 
-  lapic_timer_oneshot(SCHEDULE_REG, 20);
+  lapic_timer_oneshot(SCHEDULE_REG, 5000);
+
+  /* printf("await\r\n"); */
 
   asm volatile("sti");
 
@@ -170,7 +180,7 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
               .rflags = 0x202,
               .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
           },
-      .priority = 100,
+      .priority = 5000,
       .pagemap = get_kernel_pagemap(),
   };
 
@@ -190,7 +200,7 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
               .rflags = 0x202,
               .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
           },
-      .priority = 100,
+      .priority = 5000,
       .pagemap = get_kernel_pagemap(),
   };
 
@@ -210,7 +220,7 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
               .rflags = 0x202,
               .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
           },
-      .priority = 100,
+      .priority = 5000,
       .pagemap = get_kernel_pagemap(),
   };
 
@@ -230,7 +240,7 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
               .rflags = 0x202,
               .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
           },
-      .priority = 100,
+      .priority = 5000,
       .pagemap = get_kernel_pagemap(),
   };
 
@@ -250,7 +260,7 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
               .rflags = 0x202,
               .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
           },
-      .priority = 100,
+      .priority = 5000,
       .pagemap = get_kernel_pagemap(),
   };
 
@@ -270,7 +280,7 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
               .rflags = 0x202,
               .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
           },
-      .priority = 100,
+      .priority = 5000,
       .pagemap = get_kernel_pagemap(),
   };
 

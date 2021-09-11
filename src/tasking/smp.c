@@ -35,10 +35,11 @@ void core_init(struct stivale2_smp_info *smp_info) {
   local->tss.rsp0 = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET;
   local->tss.ist1 = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET;
 
+  lapic_timer_get_freq();
+  init_lapic();
+  
   klog(3, "Brought up cpu #%lu\r\n", smp_info->extra_argument);
   LOCKED_INC(inited_cpus);
-
-  init_lapic();
 
   await();
 }
@@ -58,6 +59,9 @@ int init_smp(struct stivale2_struct_tag_smp *smp_info) {
 
       local->tss.rsp0 = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET;
       local->tss.ist1 = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET;
+  
+      lapic_timer_get_freq();
+      init_lapic();
 
       klog(3, "Brought up cpu #%lu\r\n", i);
       LOCKED_INC(inited_cpus);

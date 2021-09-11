@@ -5,6 +5,8 @@
 #include <drivers/pit.h>
 #include <mm/pmm.h>
 #include <stdint.h>
+#include <cpu_locals.h>
+#include <printf.h>
 
 #define LAPIC_REG_SPURIOUS 0x0f0
 #define LAPIC_REG_TIMER 0x320
@@ -19,8 +21,6 @@
 #define IOAPIC_REG_IOREGSEL 0
 #define IOAPIC_REG_IOWIN 0x10
 #define IOAPIC_REG_VER 1
-
-uint32_t ticks_per_ms;
 
 void disable_pic() {
   outb(0xa1, 0xff);
@@ -56,25 +56,29 @@ void lapic_send_ipi(uint8_t lapic_id, uint8_t vect) {
 void init_lapic() { lapic_enable(0xff); }
 
 void lapic_timer_get_freq() {
-  uint16_t divisor = 1193180 / 1000;
-  outb(0x43, 0x36);
-  outb(0x40, divisor & 0xFF);
-  outb(0x40, (divisor >> 8) & 0xFF);
+  uint64_t samples = 0xfffff;
+  uint64_t pit_freq = 1193182;
+  
+  lapic_timer_stop();
 
+  lapic_write(LAPIC_REG_TIMER, (1 << 16) | 0xff);
   lapic_write(LAPIC_REG_TIMER_DIV, 0);
-  lapic_write(LAPIC_REG_TIMER_INITCNT, 0xFFFFFFFF);
 
-  uint16_t sleep_ms = 1000;
+  outb(0x40, 0);
+  outb(0x40, 0);
 
-  outb(0x43, 0x30);
-  outb(0x40, sleep_ms & 0xff);
-  outb(0x40, (sleep_ms >> 8) & 0xff);
-  while (pit_read_count() > 0)
-    ;
+  uint64_t initial_pit_tick = (uint64_t)pit_read_count();
 
-  lapic_write(LAPIC_REG_TIMER, 1 << 16);
+  lapic_write(LAPIC_REG_TIMER_INITCNT, (uint32_t)samples);
+  while (lapic_read(LAPIC_REG_TIMER_CURCNT) != 0);
+  
+  uint64_t final_pit_tick = (uint64_t)pit_read_count();
 
-  ticks_per_ms = (0xFFFFFFFF - lapic_read(LAPIC_REG_TIMER_CURCNT)) / 1000;
+  uint64_t pit_ticks = initial_pit_tick - final_pit_tick;
+  cpu_locals_t *local = get_locals();
+  local->lapic_timer_freq = (samples / pit_ticks) * pit_freq;
+
+  lapic_timer_stop();
 }
 
 void lapic_timer_stop() {
@@ -82,14 +86,14 @@ void lapic_timer_stop() {
   lapic_write(LAPIC_REG_TIMER, (1 << 16));
 }
 
-void lapic_timer_oneshot(uint8_t intr, uint32_t ms) {
+void lapic_timer_oneshot(uint8_t intr, uint32_t us) {
   lapic_timer_stop();
 
-  uint32_t ticks = ms * ticks_per_ms;
+  uint64_t ticks = us * (get_locals()->lapic_timer_freq / 1000000);
 
   lapic_write(LAPIC_REG_TIMER, intr);
   lapic_write(LAPIC_REG_TIMER_DIV, 0);
-  lapic_write(LAPIC_REG_TIMER_INITCNT, ticks);
+  lapic_write(LAPIC_REG_TIMER_INITCNT, (uint64_t)ticks);
 }
 
 uint32_t ioapic_read(uintptr_t addr, size_t reg) {

@@ -25,12 +25,11 @@ void sleep(uint64_t ticks) {
     ;
 }
 
-uint32_t pit_read_count() {
+uint16_t pit_read_count() {
   outb(0x43, 0);
-  uint32_t counter = inb(0x40);
-  counter |= inb(0x40) << 8;
-
-  return counter;
+  uint8_t lo = inb(0x40);
+  uint8_t hi = inb(0x40);
+  return (hi << 8) | lo;
 }
 
 int init_pit() {

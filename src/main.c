@@ -86,8 +86,6 @@ void kernel_main(struct stivale2_struct *bootloader_info) {
   init_vmm();
 
   disable_pic();
-  init_lapic();
-  lapic_timer_get_freq();
 
   klog(init_fb(framebuffer_info), "Framebuffer");
   klog(init_heap(), "Heap");
