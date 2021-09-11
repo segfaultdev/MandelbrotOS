@@ -57,29 +57,10 @@ size_t get_next_thread(size_t offset) {
   }
 }
 
-/* thread_t *get_next_thread(size_t *index) { */
-  /* size_t i = *index + 1; */
-  /* while (1) { */
-    /* if (i == thread_count) */
-      /* i = 0; */
-
-    /* thread_t *thread = LOCKED_READ(threads[i]); */
-    /* if (LOCK_ACQUIRE(thread->lock)) { */
-      /* *index = i; */
-      /* return thread; */
-    /* } */
-
-    /* i++; */
-  /* } */
-/* } */
-
 void schedule(uint64_t rsp) {
   lapic_timer_stop();
 
   cpu_locals_t *locals = get_locals();
-
-  /* if (!LOCK(sched_lock)) */
-    /* await(); */
 
   thread_t *current_thread = threads[locals->last_run_thread_index];
 
@@ -102,18 +83,12 @@ void schedule(uint64_t rsp) {
 
   locals->last_run_thread_index = new_index;
   current_thread = threads[locals->last_run_thread_index];
-  /* printf("%lu: %lu\r\n", locals->last_run_thread_index, locals->cpu_number); */
 
-  /* locals->current_thread = get_next_thread(&locals->last_run_thread_index); */
-  /* current_thread = locals->current_thread; */
+  uint64_t cr3;
+  asm volatile("mov %%cr3, %0" : "=r"(cr3));
+  current_thread->pagemap = (uint64_t *)cr3;
 
-  /* uint64_t cr3; */
-  /* asm volatile("mov %%cr3, %0" : "=r"(cr3)); */
-  /* current_thread->pagemap = (uint64_t *)cr3; */
-
-  /* asm volatile("mov %0, %%cr3" : : "r"(next_thread->pagemap)); */
-
-  /* UNLOCK(sched_lock); */
+  asm volatile("mov %0, %%cr3" : : "r"(current_thread->pagemap));
 
   lapic_eoi();
   lapic_timer_oneshot(SCHEDULE_REG, current_thread->priority);
@@ -122,14 +97,16 @@ void schedule(uint64_t rsp) {
 }
 
 void await() {
+  MAKE_LOCK(await_lock);
+
   while (!LOCKED_READ(sched_started))
     ;
 
   lapic_timer_oneshot(SCHEDULE_REG, 5000);
 
-  /* printf("await\r\n"); */
-
   asm volatile("sti");
+
+  UNLOCK(await_lock);
 
   while (1)
     asm volatile("hlt");
@@ -145,10 +122,8 @@ void test() {
     x[4] = '\n';
     x[5] = 0;
     serial_print(x);
-    /* pcspkr_tone_on(1000); */
     for (volatile size_t i = 0; i < 5000000; i++)
       asm volatile("nop");
-    /* pcspkr_tone_off(); */
   }
 }
 

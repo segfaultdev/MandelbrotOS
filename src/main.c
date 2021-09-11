@@ -51,10 +51,8 @@ void k_thread() {
     x[4] = '\n';
     x[5] = 0;
     serial_print(x);
-    /* pcspkr_tone_on(10000); */
     for (volatile size_t i = 0; i < 5000000; i++)
       asm volatile("nop");
-    /* pcspkr_tone_off(); */
   }
 
   while (1)
@@ -94,8 +92,6 @@ void kernel_main(struct stivale2_struct *bootloader_info) {
   serial_print("Thread: core\n");
 
   scheduler_init(smp_info, (uintptr_t)k_thread);
-
-  /* jmp(); */
 
   while (1)
     ;

@@ -3,6 +3,7 @@
 #include <asm.h>
 #include <drivers/apic.h>
 #include <drivers/pit.h>
+#include <lock.h>
 #include <mm/pmm.h>
 #include <stdint.h>
 #include <cpu_locals.h>
@@ -64,6 +65,8 @@ void lapic_timer_get_freq() {
   lapic_write(LAPIC_REG_TIMER, (1 << 16) | 0xff);
   lapic_write(LAPIC_REG_TIMER_DIV, 0);
 
+  MAKE_LOCK(freq_lock);
+
   outb(0x40, 0);
   outb(0x40, 0);
 
@@ -74,6 +77,8 @@ void lapic_timer_get_freq() {
   
   uint64_t final_pit_tick = (uint64_t)pit_read_count();
 
+  UNLOCK(freq_lock);
+  
   uint64_t pit_ticks = initial_pit_tick - final_pit_tick;
   cpu_locals_t *local = get_locals();
   local->lapic_timer_freq = (samples / pit_ticks) * pit_freq;
