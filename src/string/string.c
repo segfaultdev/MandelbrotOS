@@ -38,3 +38,14 @@ int strncmp(const char *s1, const char *s2, size_t n) {
 
   return 0;
 }
+
+void memmove(void *dest, void *src, size_t l) {
+  uint64_t *rdest = (uint64_t *)dest;
+  uint64_t *rsrc = (uint64_t *)src;
+  if (src > dest)
+    for (size_t i = 0; i < l; i++)
+      rdest[i] = rsrc[i];
+  else if (src < dest)
+    for (size_t i = l; i > 0; i--)
+      rdest[i - 1] = rsrc[i - 1];
+}

@@ -13,7 +13,7 @@ QEMU_DOCKER = $(QEMU) -curses
 HDD = mandelbrotos.hdd
 KERNEL = $(BUILD_DIRECTORY)/mandelbrotos.elf
 
-ASFLAGS = -f elf64 -g
+ASFLAGS = -f elf64 -O3
 
 CFLAGS := \
 	-mcmodel=kernel \
@@ -24,7 +24,7 @@ CFLAGS := \
 	-Wextra \
 	-lm \
 	-std=gnu99 \
-	-g \
+	-O3 \
 	-Isrc/include \
 	-mgeneral-regs-only \
 	-mno-red-zone \

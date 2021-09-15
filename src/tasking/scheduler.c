@@ -18,6 +18,7 @@
 #include <sys/gdt.h>
 #include <sys/irq.h>
 #include <tasking/scheduler.h>
+#include <vec.h>
 
 #define ALIVE 0
 #define DEAD 1
@@ -30,8 +31,8 @@ size_t proc_count = 0;
 size_t current_tid = 0;
 size_t current_pid = 0;
 
-thread_t **threads;
-proc_t **processes;
+static vec_t(thread_t *) threads = {};
+static vec_t(proc_t *) processes = {};
 
 lock_t sched_lock = {0};
 
@@ -42,6 +43,100 @@ void k_idle() {
 
 extern void switch_and_run_stack(uintptr_t stack);
 
+void enqueue_thread(thread_t *thread) {
+  LOCK(sched_lock);
+
+  if (thread->enqueued) {
+    UNLOCK(sched_lock);
+    return;
+  }
+
+  vec_push(&threads, thread);
+  vec_push(&thread->mother_proc->threads, thread);
+  thread->mother_proc->thread_count++;
+  thread->enqueued = 1;
+  thread_count++;
+
+  UNLOCK(sched_lock);
+}
+
+thread_t *create_thread_template(char *name, uintptr_t addr, size_t time_slice,
+                                 uint64_t code_segment, uint64_t data_segment,
+                                 proc_t *mother_proc, int auto_enqueue) {
+  thread_t *new_thread = kmalloc(sizeof(thread_t));
+
+  LOCK(sched_lock);
+
+  *new_thread = (thread_t){
+      .tid = current_tid++,
+      .exit_state = -1,
+      .state = ALIVE,
+      .name = name,
+      .run_once = 0,
+      .mother_proc = mother_proc,
+      .enqueued = 0,
+      .registers =
+          (registers_t){
+              .cs = code_segment,
+              .ss = data_segment,
+              .rip = (uint64_t)addr,
+              .rflags = 0x202,
+              .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
+          },
+      .time_slice = (time_slice == 0) ? 5000 : time_slice,
+  };
+
+  UNLOCK(sched_lock);
+
+  if (auto_enqueue)
+    enqueue_thread(new_thread);
+
+  return new_thread;
+}
+
+thread_t *create_kernel_thread(char *name, uintptr_t addr, size_t time_slice,
+                               proc_t *mother_proc) {
+  return create_thread_template(name, addr, time_slice, GDT_SEG_KCODE,
+                                GDT_SEG_KDATA, mother_proc, 1);
+}
+
+void enqueue_proc(proc_t *proc) {
+  LOCK(sched_lock);
+
+  if (proc->enqueued) {
+    UNLOCK(sched_lock);
+    return;
+  }
+
+  vec_push(&processes, proc);
+  proc->enqueued = 1;
+  proc_count++;
+
+  UNLOCK(sched_lock);
+}
+
+proc_t *create_proc(char *name) {
+  proc_t *new_proc = kmalloc(sizeof(proc_t));
+
+  LOCK(sched_lock);
+
+  *new_proc = (proc_t){
+      .name = name,
+      .thread_count = 0,
+      .pid = current_pid++,
+      .pagemap = (uint64_t)get_kernel_pagemap(),
+      .enqueued = 0,
+  };
+
+  new_proc->threads.data = kmalloc(sizeof(thread_t *));
+
+  UNLOCK(sched_lock);
+
+  enqueue_proc(new_proc);
+
+  return new_proc;
+}
+
 size_t get_next_thread(size_t offset) {
   while (1) {
     if (offset < thread_count - 1)
@@ -49,7 +144,7 @@ size_t get_next_thread(size_t offset) {
     else
       offset = 0;
 
-    thread_t *current_thread = LOCKED_READ(threads[offset]);
+    thread_t *current_thread = LOCKED_READ(threads.data[offset]);
 
     if (LOCK_ACQUIRE(current_thread->lock)) {
       return offset;
@@ -62,17 +157,17 @@ void schedule(uint64_t rsp) {
 
   cpu_locals_t *locals = get_locals();
 
-  thread_t *current_thread = threads[locals->last_run_thread_index];
+  thread_t *current_thread = threads.data[locals->last_run_thread_index];
 
   size_t new_index = get_next_thread(locals->last_run_thread_index);
 
   if (new_index == locals->last_run_thread_index) {
     lapic_eoi();
-    lapic_timer_oneshot(SCHEDULE_REG, current_thread->priority);
+    lapic_timer_oneshot(SCHEDULE_REG, current_thread->time_slice);
     asm volatile("sti");
     while (1)
       asm volatile("hlt");
-  } 
+  }
 
   if (current_thread->run_once)
     current_thread->registers = *((registers_t *)rsp);
@@ -82,16 +177,16 @@ void schedule(uint64_t rsp) {
   UNLOCK(current_thread->lock);
 
   locals->last_run_thread_index = new_index;
-  current_thread = threads[locals->last_run_thread_index];
+  current_thread = threads.data[locals->last_run_thread_index];
 
   uint64_t cr3;
   asm volatile("mov %%cr3, %0" : "=r"(cr3));
-  current_thread->pagemap = (uint64_t *)cr3;
+  current_thread->mother_proc->pagemap = cr3;
 
-  asm volatile("mov %0, %%cr3" : : "r"(current_thread->pagemap));
+  asm volatile("mov %0, %%cr3" : : "r"(current_thread->mother_proc->pagemap));
 
   lapic_eoi();
-  lapic_timer_oneshot(SCHEDULE_REG, current_thread->priority);
+  lapic_timer_oneshot(SCHEDULE_REG, current_thread->time_slice);
 
   switch_and_run_stack((uintptr_t)&current_thread->registers);
 }
@@ -128,142 +223,22 @@ void test() {
 }
 
 void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
-  processes = kcalloc(sizeof(proc_t *));
-  threads = kcalloc(sizeof(thread_t *) * 6);
+  processes.data = kcalloc(sizeof(proc_t *));
+  threads.data = kcalloc(sizeof(thread_t *));
 
-  processes[0] = kmalloc(sizeof(proc_t));
-  *processes[0] = (proc_t){
-      .name = "kproc",
-      .thread_count = 1,
-      .threads = kmalloc(sizeof(thread_t *) * 6),
-      .pid = current_pid++,
-  };
+  create_proc("k_proc");
 
-  threads[0] = kmalloc(sizeof(thread_t));
-  *threads[0] = (thread_t){
-      .tid = current_tid++,
-      .exit_state = -1,
-      .state = ALIVE,
-      .name = "k_init",
-      .run_once = 0,
-      .mother_proc = processes[0],
-      .registers =
-          (registers_t){
-              .cs = 0x08,
-              .ss = 0x10,
-              .rip = (uint64_t)addr,
-              .rflags = 0x202,
-              .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
-          },
-      .priority = 5000,
-      .pagemap = get_kernel_pagemap(),
-  };
+  create_kernel_thread("k_init", (uint64_t)addr, 5000, processes.data[0]);
+  create_kernel_thread("k_test", (uint64_t)test, 5000, processes.data[0]);
+  create_kernel_thread("k_idle", (uint64_t)k_idle, 5000, processes.data[0]);
 
-  threads[1] = kmalloc(sizeof(thread_t));
-  *threads[1] = (thread_t){
-      .tid = current_tid++,
-      .exit_state = -1,
-      .state = ALIVE,
-      .name = "k_test",
-      .run_once = 0,
-      .mother_proc = processes[0],
-      .registers =
-          (registers_t){
-              .cs = 0x08,
-              .ss = 0x10,
-              .rip = (uint64_t)test,
-              .rflags = 0x202,
-              .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
-          },
-      .priority = 5000,
-      .pagemap = get_kernel_pagemap(),
-  };
+  for (size_t i = 0; i < 3; i++)
+    vec_push(&processes.data[0]->threads, threads.data[i]);
 
-  threads[2] = kmalloc(sizeof(thread_t));
-  *threads[2] = (thread_t){
-      .tid = current_tid++,
-      .exit_state = -1,
-      .state = ALIVE,
-      .name = "k_test",
-      .run_once = 0,
-      .mother_proc = processes[0],
-      .registers =
-          (registers_t){
-              .cs = 0x08,
-              .ss = 0x10,
-              .rip = (uint64_t)k_idle,
-              .rflags = 0x202,
-              .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
-          },
-      .priority = 5000,
-      .pagemap = get_kernel_pagemap(),
-  };
-
-  threads[3] = kmalloc(sizeof(thread_t));
-  *threads[3] = (thread_t){
-      .tid = current_tid++,
-      .exit_state = -1,
-      .state = ALIVE,
-      .name = "k_test",
-      .run_once = 0,
-      .mother_proc = processes[0],
-      .registers =
-          (registers_t){
-              .cs = 0x08,
-              .ss = 0x10,
-              .rip = (uint64_t)k_idle,
-              .rflags = 0x202,
-              .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
-          },
-      .priority = 5000,
-      .pagemap = get_kernel_pagemap(),
-  };
-
-  threads[4] = kmalloc(sizeof(thread_t));
-  *threads[4] = (thread_t){
-      .tid = current_tid++,
-      .exit_state = -1,
-      .state = ALIVE,
-      .name = "k_test",
-      .run_once = 0,
-      .mother_proc = processes[0],
-      .registers =
-          (registers_t){
-              .cs = 0x08,
-              .ss = 0x10,
-              .rip = (uint64_t)k_idle,
-              .rflags = 0x202,
-              .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
-          },
-      .priority = 5000,
-      .pagemap = get_kernel_pagemap(),
-  };
-
-  threads[5] = kmalloc(sizeof(thread_t));
-  *threads[5] = (thread_t){
-      .tid = current_tid++,
-      .exit_state = -1,
-      .state = ALIVE,
-      .name = "k_test",
-      .run_once = 0,
-      .mother_proc = processes[0],
-      .registers =
-          (registers_t){
-              .cs = 0x08,
-              .ss = 0x10,
-              .rip = (uint64_t)k_idle,
-              .rflags = 0x202,
-              .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
-          },
-      .priority = 5000,
-      .pagemap = get_kernel_pagemap(),
-  };
-
-  proc_count++;
-  for (size_t i = 0; i < 6; i++)
-    processes[0]->threads[i] = threads[i];
-
-  thread_count += 6;
+  printf("Proc: %s: %lu:\r\n%p\r\n%p\r\n%p\r\n", processes.data[0]->name,
+         processes.data[0]->thread_count, processes.data[0]->threads.data[0],
+         processes.data[0]->threads.data[1],
+         processes.data[0]->threads.data[2]);
 
   sched_started = 1;
 

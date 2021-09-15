@@ -5,29 +5,31 @@
 #include <stdint.h>
 
 #include <boot/stivale2.h>
-#include <registers.h>
-
 #include <lock.h>
+#include <registers.h>
+#include <vec.h>
 
 struct thread;
 
 typedef struct proc {
   char *name;
   int status;
+  int enqueued;
+  uint64_t pagemap;
   size_t pid;
   size_t thread_count;
-  struct thread **threads;
+  vec_t(struct thread *) threads;
 } proc_t;
 
 typedef struct thread {
   char *name;
   int state;
-  lock_t lock;
+  int enqueued;
   int exit_state;
   int run_once;
-  uint64_t *pagemap;
+  lock_t lock;
   size_t tid;
-  size_t priority;
+  size_t time_slice;
   proc_t *mother_proc;
   registers_t registers;
 } thread_t;

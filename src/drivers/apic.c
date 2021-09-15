@@ -1,13 +1,13 @@
 #include <acpi/acpi.h>
 #include <acpi/tables.h>
 #include <asm.h>
+#include <cpu_locals.h>
 #include <drivers/apic.h>
 #include <drivers/pit.h>
 #include <lock.h>
 #include <mm/pmm.h>
-#include <stdint.h>
-#include <cpu_locals.h>
 #include <printf.h>
+#include <stdint.h>
 
 #define LAPIC_REG_SPURIOUS 0x0f0
 #define LAPIC_REG_TIMER 0x320
@@ -59,7 +59,7 @@ void init_lapic() { lapic_enable(0xff); }
 void lapic_timer_get_freq() {
   uint64_t samples = 0xfffff;
   uint64_t pit_freq = 1193182;
-  
+
   lapic_timer_stop();
 
   lapic_write(LAPIC_REG_TIMER, (1 << 16) | 0xff);
@@ -73,12 +73,13 @@ void lapic_timer_get_freq() {
   uint64_t initial_pit_tick = (uint64_t)pit_read_count();
 
   lapic_write(LAPIC_REG_TIMER_INITCNT, (uint32_t)samples);
-  while (lapic_read(LAPIC_REG_TIMER_CURCNT) != 0);
-  
+  while (lapic_read(LAPIC_REG_TIMER_CURCNT) != 0)
+    ;
+
   uint64_t final_pit_tick = (uint64_t)pit_read_count();
 
   UNLOCK(freq_lock);
-  
+
   uint64_t pit_ticks = initial_pit_tick - final_pit_tick;
   cpu_locals_t *local = get_locals();
   local->lapic_timer_freq = (samples / pit_ticks) * pit_freq;
