@@ -17,6 +17,7 @@
 #include <string.h>
 #include <sys/gdt.h>
 #include <sys/irq.h>
+#include <sys/types.h>
 #include <tasking/scheduler.h>
 #include <vec.h>
 
@@ -36,12 +37,12 @@ static vec_t(proc_t *) processes = {};
 
 lock_t sched_lock = {0};
 
+extern void switch_and_run_stack(uintptr_t stack);
+
 void k_idle() {
   while (1)
     ;
 }
-
-extern void switch_and_run_stack(uintptr_t stack);
 
 void enqueue_thread(thread_t *thread) {
   LOCK(sched_lock);
@@ -137,7 +138,59 @@ proc_t *create_proc(char *name) {
   return new_proc;
 }
 
-size_t get_next_thread(size_t offset) {
+int dequeue_thread(thread_t *thread) {
+  if (!thread->enqueued)
+    return 0;
+
+  LOCK(sched_lock);
+
+  while (1)
+    if (LOCK_ACQUIRE(thread->lock)) {
+      thread->enqueued = 0;
+      vec_remove(&threads, thread);
+      UNLOCK(sched_lock);
+      return 1;
+    }
+
+  UNLOCK(sched_lock);
+
+  return 0;
+}
+
+void destroy_thread(thread_t *thread) {
+  if (thread->enqueued)
+    dequeue_thread(thread);
+
+  kfree(thread);
+}
+
+int dequeue_proc(proc_t *proc) {
+  if (!proc->enqueued)
+    return 0;
+
+  LOCK(sched_lock);
+
+  for (size_t i = 0; i < proc->thread_count; i++)
+    dequeue_thread(proc->threads.data[i]);
+
+  vec_remove(&processes, proc);
+
+  UNLOCK(sched_lock);
+
+  return 1;
+}
+
+void destroy_proc(proc_t *proc) {
+  if (proc->enqueued)
+    dequeue_proc(proc);
+
+  for (size_t i = 0; i < proc->thread_count; i++)
+    destroy_thread(proc->threads.data[i]);
+}
+
+ssize_t get_next_thread(size_t offset) {
+  size_t i = offset + 1;
+
   while (1) {
     if (offset < thread_count - 1)
       offset++;
@@ -146,25 +199,32 @@ size_t get_next_thread(size_t offset) {
 
     thread_t *current_thread = LOCKED_READ(threads.data[offset]);
 
-    if (LOCK_ACQUIRE(current_thread->lock)) {
+    if (LOCK_ACQUIRE(current_thread->lock))
       return offset;
-    }
+
+    if (i == offset + 1)
+      break;
   }
+
+  return -1;
 }
 
-void schedule(uint64_t rsp) {
+void __attribute__((optimize(0))) schedule(uint64_t rsp) {
   lapic_timer_stop();
 
   cpu_locals_t *locals = get_locals();
+  thread_t *current_thread = (!locals->current_thread)
+                                 ? LOCKED_READ(threads.data[0])
+                                 : locals->current_thread;
 
-  thread_t *current_thread = threads.data[locals->last_run_thread_index];
-
-  size_t new_index = get_next_thread(locals->last_run_thread_index);
-
-  if (new_index == locals->last_run_thread_index) {
+  ssize_t inew_index = get_next_thread(locals->last_run_thread_index);
+  if (inew_index == -1) {
+    printf("How????\r\n");
+    locals->last_run_thread_index = 0;
     lapic_eoi();
-    lapic_timer_oneshot(SCHEDULE_REG, current_thread->time_slice);
+    lapic_timer_oneshot(SCHEDULE_REG, 30000);
     asm volatile("sti");
+
     while (1)
       asm volatile("hlt");
   }
@@ -176,32 +236,31 @@ void schedule(uint64_t rsp) {
 
   UNLOCK(current_thread->lock);
 
-  locals->last_run_thread_index = new_index;
-  current_thread = threads.data[locals->last_run_thread_index];
-
+  size_t new_index = (size_t)inew_index;
   uint64_t cr3;
   asm volatile("mov %%cr3, %0" : "=r"(cr3));
   current_thread->mother_proc->pagemap = cr3;
 
-  asm volatile("mov %0, %%cr3" : : "r"(current_thread->mother_proc->pagemap));
+  locals->last_run_thread_index = new_index;
+  locals->current_thread =
+      LOCKED_READ(threads.data[locals->last_run_thread_index]);
+  current_thread = locals->current_thread;
 
   lapic_eoi();
   lapic_timer_oneshot(SCHEDULE_REG, current_thread->time_slice);
+
+  asm volatile("mov %0, %%cr3" : : "r"(current_thread->mother_proc->pagemap));
 
   switch_and_run_stack((uintptr_t)&current_thread->registers);
 }
 
 void await() {
-  MAKE_LOCK(await_lock);
-
   while (!LOCKED_READ(sched_started))
     ;
 
   lapic_timer_oneshot(SCHEDULE_REG, 5000);
 
   asm volatile("sti");
-
-  UNLOCK(await_lock);
 
   while (1)
     asm volatile("hlt");
@@ -230,15 +289,9 @@ void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
 
   create_kernel_thread("k_init", (uint64_t)addr, 5000, processes.data[0]);
   create_kernel_thread("k_test", (uint64_t)test, 5000, processes.data[0]);
-  create_kernel_thread("k_idle", (uint64_t)k_idle, 5000, processes.data[0]);
 
-  for (size_t i = 0; i < 3; i++)
-    vec_push(&processes.data[0]->threads, threads.data[i]);
-
-  printf("Proc: %s: %lu:\r\n%p\r\n%p\r\n%p\r\n", processes.data[0]->name,
-         processes.data[0]->thread_count, processes.data[0]->threads.data[0],
-         processes.data[0]->threads.data[1],
-         processes.data[0]->threads.data[2]);
+  for (size_t i = 0; i < smp_info->cpu_count * 2; i++)
+    create_kernel_thread("k_idle", (uint64_t)k_idle, 5000, processes.data[0]);
 
   sched_started = 1;
 
