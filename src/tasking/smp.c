@@ -13,6 +13,7 @@
 #include <sys/idt.h>
 #include <tasking/scheduler.h>
 #include <tasking/smp.h>
+#include <printf.h>
 
 size_t inited_cpus = 0;
 
@@ -45,14 +46,12 @@ void core_init(struct stivale2_smp_info *smp_info) {
 }
 
 int init_smp(struct stivale2_struct_tag_smp *smp_info) {
-  uint8_t bsp_lapic_id = smp_info->bsp_lapic_id;
-
   for (size_t i = 0; i < smp_info->cpu_count; i++) {
-    if (smp_info->smp_info[i].lapic_id == bsp_lapic_id) {
+    if (smp_info->smp_info[i].lapic_id == smp_info->bsp_lapic_id) {
       cpu_locals_t *local = kcalloc(sizeof(cpu_locals_t));
       local->cpu_number = i;
       local->last_run_thread_index = 0;
-      local->lapic_id = bsp_lapic_id;
+      local->lapic_id = smp_info->bsp_lapic_id;
       set_locals(local);
 
       load_tss((uintptr_t)&local->tss);
@@ -69,10 +68,13 @@ int init_smp(struct stivale2_struct_tag_smp *smp_info) {
       continue;
     }
 
-    smp_info->smp_info[i].extra_argument = i;
-    smp_info->smp_info[i].target_stack =
-        (uint64_t)pmalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET;
-    smp_info->smp_info[i].goto_address = (uint64_t)core_init;
+    /* smp_info->smp_info[i].extra_argument = i; */
+    /* smp_info->smp_info[i].target_stack = */
+        /* (uint64_t)pmalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET; */
+    /* smp_info->smp_info[i].goto_address = (uint64_t)core_init; */
+    LOCKED_WRITE(smp_info->smp_info[i].extra_argument, i);
+    LOCKED_WRITE(smp_info->smp_info[i].target_stack, (uint64_t)pmalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET);
+    LOCKED_WRITE(smp_info->smp_info[i].goto_address, (uint64_t)core_init);
   }
 
   while (LOCKED_READ(inited_cpus) != smp_info->cpu_count)

@@ -4,7 +4,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <boot/stivale2.h>
 #include <lock.h>
 #include <registers.h>
 #include <vec.h>
@@ -26,7 +25,6 @@ typedef struct thread {
   int state;
   int enqueued;
   int exit_state;
-  int run_once;
   lock_t lock;
   size_t tid;
   size_t time_slice;
@@ -34,7 +32,7 @@ typedef struct thread {
   registers_t registers;
 } thread_t;
 
-void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr);
+int scheduler_init(uintptr_t addr);
 void await();
 
 #endif

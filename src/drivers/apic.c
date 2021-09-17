@@ -57,9 +57,6 @@ void lapic_send_ipi(uint8_t lapic_id, uint8_t vect) {
 void init_lapic() { lapic_enable(0xff); }
 
 void lapic_timer_get_freq() {
-  uint64_t samples = 0xfffff;
-  uint64_t pit_freq = 1193182;
-
   lapic_timer_stop();
 
   lapic_write(LAPIC_REG_TIMER, (1 << 16) | 0xff);
@@ -72,7 +69,7 @@ void lapic_timer_get_freq() {
 
   uint64_t initial_pit_tick = (uint64_t)pit_read_count();
 
-  lapic_write(LAPIC_REG_TIMER_INITCNT, (uint32_t)samples);
+  lapic_write(LAPIC_REG_TIMER_INITCNT, (uint32_t)0xfffff);
   while (lapic_read(LAPIC_REG_TIMER_CURCNT) != 0)
     ;
 
@@ -82,7 +79,7 @@ void lapic_timer_get_freq() {
 
   uint64_t pit_ticks = initial_pit_tick - final_pit_tick;
   cpu_locals_t *local = get_locals();
-  local->lapic_timer_freq = (samples / pit_ticks) * pit_freq;
+  local->lapic_timer_freq = (0xfffff / pit_ticks) * 1193182;
 
   lapic_timer_stop();
 }

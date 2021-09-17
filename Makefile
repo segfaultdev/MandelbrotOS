@@ -13,7 +13,7 @@ QEMU_DOCKER = $(QEMU) -curses
 HDD = mandelbrotos.hdd
 KERNEL = $(BUILD_DIRECTORY)/mandelbrotos.elf
 
-ASFLAGS = -f elf64 -O2
+ASFLAGS = -f elf64 -O3
 
 CFLAGS := \
 	-mcmodel=kernel \

@@ -147,7 +147,7 @@ schedule_irq:
   cli
   push 0
   push 16
+  cld
   pushaq
   mov rdi, rsp
   call schedule
-

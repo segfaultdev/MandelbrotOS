@@ -24,8 +24,6 @@
 #define ALIVE 0
 #define DEAD 1
 
-int sched_started = 0;
-
 size_t thread_count = 0;
 size_t proc_count = 0;
 
@@ -66,14 +64,11 @@ thread_t *create_thread_template(char *name, uintptr_t addr, size_t time_slice,
                                  proc_t *mother_proc, int auto_enqueue) {
   thread_t *new_thread = kmalloc(sizeof(thread_t));
 
-  LOCK(sched_lock);
-
   *new_thread = (thread_t){
       .tid = current_tid++,
       .exit_state = -1,
       .state = ALIVE,
       .name = name,
-      .run_once = 0,
       .mother_proc = mother_proc,
       .enqueued = 0,
       .registers =
@@ -86,8 +81,6 @@ thread_t *create_thread_template(char *name, uintptr_t addr, size_t time_slice,
           },
       .time_slice = (time_slice == 0) ? 5000 : time_slice,
   };
-
-  UNLOCK(sched_lock);
 
   if (auto_enqueue)
     enqueue_thread(new_thread);
@@ -119,8 +112,6 @@ void enqueue_proc(proc_t *proc) {
 proc_t *create_proc(char *name) {
   proc_t *new_proc = kmalloc(sizeof(proc_t));
 
-  LOCK(sched_lock);
-
   *new_proc = (proc_t){
       .name = name,
       .thread_count = 0,
@@ -130,8 +121,6 @@ proc_t *create_proc(char *name) {
   };
 
   new_proc->threads.data = kmalloc(sizeof(thread_t *));
-
-  UNLOCK(sched_lock);
 
   enqueue_proc(new_proc);
 
@@ -188,63 +177,62 @@ void destroy_proc(proc_t *proc) {
     destroy_thread(proc->threads.data[i]);
 }
 
-ssize_t get_next_thread(size_t offset) {
-  size_t i = offset + 1;
+thread_t *get_next_thread(size_t *offset) {
+  size_t i = *offset + 1;
 
   while (1) {
-    if (offset < thread_count - 1)
-      offset++;
-    else
-      offset = 0;
+    if (i == thread_count)
+      i = 0;
 
-    thread_t *current_thread = LOCKED_READ(threads.data[offset]);
+    thread_t *current_thread = LOCKED_READ(threads.data[i]);
 
-    if (LOCK_ACQUIRE(current_thread->lock))
-      return offset;
+    if (LOCK_ACQUIRE(current_thread->lock)) {
+      *offset = i;
+      return current_thread;
+    }
 
-    if (i == offset + 1)
+    i++;
+
+    if (i == *offset + 1)
       break;
   }
 
-  return -1;
+  *offset = 0;
+  return NULL;
 }
 
-void __attribute__((optimize(0))) schedule(uint64_t rsp) {
-  lapic_timer_stop();
-
+void schedule(uint64_t rsp) {
   cpu_locals_t *locals = get_locals();
-  thread_t *current_thread = (!locals->current_thread)
-                                 ? LOCKED_READ(threads.data[0])
-                                 : locals->current_thread;
+  thread_t *current_thread = locals->current_thread;
 
-  ssize_t inew_index = get_next_thread(locals->last_run_thread_index);
-  if (inew_index == -1) {
-    printf("How????\r\n");
-    locals->last_run_thread_index = 0;
+  if (!LOCK_ACQUIRE(sched_lock)) {
     lapic_eoi();
-    lapic_timer_oneshot(SCHEDULE_REG, 30000);
+    lapic_timer_oneshot(SCHEDULE_REG, (current_thread) ? current_thread->time_slice : 20000);
     asm volatile("sti");
 
     while (1)
       asm volatile("hlt");
   }
 
-  if (current_thread->run_once)
+  if (current_thread) {
     current_thread->registers = *((registers_t *)rsp);
-  else
-    current_thread->run_once = 1;
+    UNLOCK(current_thread->lock);
+  }
 
-  UNLOCK(current_thread->lock);
-
-  size_t new_index = (size_t)inew_index;
-  uint64_t cr3;
-  asm volatile("mov %%cr3, %0" : "=r"(cr3));
-  current_thread->mother_proc->pagemap = cr3;
-
-  locals->last_run_thread_index = new_index;
-  locals->current_thread =
-      LOCKED_READ(threads.data[locals->last_run_thread_index]);
+  locals->current_thread = get_next_thread(&locals->last_run_thread_index);
   current_thread = locals->current_thread;
+  
+  if (!current_thread) {
+    lapic_eoi();
+    lapic_timer_oneshot(SCHEDULE_REG, 20000);
+    UNLOCK(sched_lock);
+    asm volatile("sti");
+
+    while (1)
+      asm volatile("hlt");
+  }
+
+  UNLOCK(sched_lock);
 
   lapic_eoi();
   lapic_timer_oneshot(SCHEDULE_REG, current_thread->time_slice);
@@ -255,10 +243,7 @@ void __attribute__((optimize(0))) schedule(uint64_t rsp) {
 }
 
 void await() {
-  while (!LOCKED_READ(sched_started))
-    ;
-
-  lapic_timer_oneshot(SCHEDULE_REG, 5000);
+  lapic_timer_oneshot(SCHEDULE_REG, 20000);
 
   asm volatile("sti");
 
@@ -266,34 +251,13 @@ void await() {
     asm volatile("hlt");
 }
 
-void test() {
-  while (1) {
-    char x[6];
-    x[0] = '2';
-    x[1] = ':';
-    x[2] = ' ';
-    x[3] = get_locals()->cpu_number + '0';
-    x[4] = '\n';
-    x[5] = 0;
-    serial_print(x);
-    for (volatile size_t i = 0; i < 5000000; i++)
-      asm volatile("nop");
-  }
-}
-
-void scheduler_init(struct stivale2_struct_tag_smp *smp_info, uintptr_t addr) {
+int scheduler_init(uintptr_t addr) {
   processes.data = kcalloc(sizeof(proc_t *));
   threads.data = kcalloc(sizeof(thread_t *));
 
   create_proc("k_proc");
 
   create_kernel_thread("k_init", (uint64_t)addr, 5000, processes.data[0]);
-  create_kernel_thread("k_test", (uint64_t)test, 5000, processes.data[0]);
 
-  for (size_t i = 0; i < smp_info->cpu_count * 2; i++)
-    create_kernel_thread("k_idle", (uint64_t)k_idle, 5000, processes.data[0]);
-
-  sched_started = 1;
-
-  await();
+  return 0;
 }
