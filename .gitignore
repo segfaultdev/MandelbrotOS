@@ -14,3 +14,6 @@ resources/BOOTX64.EFI
 resources/echfs-utils
 resources/limine-install
 resources/limine.sys
+
+# Boch's lock files
+*.lock
