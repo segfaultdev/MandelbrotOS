@@ -14,19 +14,21 @@
 #define BIT_CLEAR(__bit) (pmm_bitmap[(__bit) / 8] &= ~(1 << ((__bit) % 8)))
 #define BIT_TEST(__bit) ((pmm_bitmap[(__bit) / 8] >> ((__bit) % 8)) & 1)
 
+static volatile lock_t pmm_lock = {0};
+
 static uint8_t *pmm_bitmap = 0;
 static uintptr_t highest_page = 0;
 
 void free_page(void *adr) {
-  MAKE_LOCK(pmm_free_lock);
+  LOCK(pmm_lock);
   BIT_CLEAR((size_t)adr / PAGE_SIZE);
-  UNLOCK(pmm_free_lock);
+  UNLOCK(pmm_lock);
 }
 
 void alloc_page(void *adr) {
-  MAKE_LOCK(pmm_alloc_lock);
+  MAKE_LOCK(pmm_lock);
   BIT_SET((size_t)adr / PAGE_SIZE);
-  UNLOCK(pmm_alloc_lock);
+  UNLOCK(pmm_lock);
 }
 
 void free_pages(void *adr, size_t page_count) {
@@ -40,21 +42,34 @@ void alloc_pages(void *adr, size_t page_count) {
 }
 
 void *pmalloc(size_t pages) {
+  LOCK(pmm_lock);
+
   for (size_t i = 0; i < highest_page / PAGE_SIZE; i++)
     for (size_t j = 0; j < pages; j++) {
       if (BIT_TEST(i))
         break;
       else if (j == pages - 1) {
+        UNLOCK(pmm_lock);
         alloc_pages((void *)(i * PAGE_SIZE), pages);
         return (void *)(i * PAGE_SIZE);
       }
     }
+
+  UNLOCK(pmm_lock);
+  klog(1, "Ran out of memory! Halting!");
+  while (1)
+    ;
   return NULL;
 }
 
 void *pcalloc(size_t pages) {
-  void *ret = pmalloc(pages);
+  char *ret = (char *)pmalloc(pages);
+
+  if (ret == NULL)
+    return NULL;
+
   memset(ret + PHYS_MEM_OFFSET, 0, pages * PAGE_SIZE);
+
   return ret;
 }
 

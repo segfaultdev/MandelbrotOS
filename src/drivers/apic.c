@@ -7,6 +7,7 @@
 #include <lock.h>
 #include <mm/pmm.h>
 #include <printf.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #define LAPIC_REG_SPURIOUS 0x0f0
@@ -62,11 +63,6 @@ void lapic_timer_get_freq() {
   lapic_write(LAPIC_REG_TIMER, (1 << 16) | 0xff);
   lapic_write(LAPIC_REG_TIMER_DIV, 0);
 
-  MAKE_LOCK(freq_lock);
-
-  outb(0x40, 0);
-  outb(0x40, 0);
-
   uint64_t initial_pit_tick = (uint64_t)pit_read_count();
 
   lapic_write(LAPIC_REG_TIMER_INITCNT, (uint32_t)0xfffff);
@@ -74,8 +70,6 @@ void lapic_timer_get_freq() {
     ;
 
   uint64_t final_pit_tick = (uint64_t)pit_read_count();
-
-  UNLOCK(freq_lock);
 
   uint64_t pit_ticks = initial_pit_tick - final_pit_tick;
   cpu_locals_t *local = get_locals();
@@ -114,8 +108,8 @@ uint32_t get_gsi_count(uintptr_t addr) {
 }
 
 madt_ioapic_t *get_ioapic_by_gsi(uint32_t gsi) {
-  for (size_t i = 0; i < ioapic_len; i++) {
-    madt_ioapic_t *ioapic = madt_ioapics[i];
+  for (size_t i = 0; i < (size_t)madt_ioapics.length; i++) {
+    madt_ioapic_t *ioapic = madt_ioapics.data[i];
 
     if (ioapic->gsi <= gsi &&
         ioapic->gsi + get_gsi_count(ioapic->address + PHYS_MEM_OFFSET) > gsi)
@@ -145,8 +139,8 @@ void ioapic_redirect_gsi(uint8_t lapic_id, uint32_t gsi, uint8_t vect,
 
 void ioapic_redirect_irq(uint8_t lapic_id, uint8_t irq, uint8_t vect,
                          int status) {
-  for (size_t i = 0; i < iso_len; i++) {
-    madt_iso_t *iso = madt_isos[i];
+  for (size_t i = 0; i < (size_t)madt_isos.length; i++) {
+    madt_iso_t *iso = madt_isos.data[i];
     if (iso->irq_source == irq) {
       ioapic_redirect_gsi(lapic_id, iso->gsi, vect, iso->flags, status);
     }

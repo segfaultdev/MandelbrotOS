@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <vec.h>
 
 rsdp_t *rsdp;
 rsdt_t *rsdt;
@@ -14,15 +15,10 @@ xsdt_t *xsdt;
 mcfg_t *mcfg;
 madt_t *madt;
 
-madt_ioapic_t **madt_ioapics;
-madt_lapic_t **madt_lapics;
-madt_nmi_t **madt_nmis;
-madt_iso_t **madt_isos;
-
-size_t ioapic_len = 0;
-size_t lapic_len = 0;
-size_t nmi_len = 0;
-size_t iso_len = 0;
+vec_madt_lapic madt_lapics;
+vec_madt_ioapic madt_ioapics;
+vec_madt_nmi madt_nmis; 
+vec_madt_iso madt_isos;
 
 // TODO: ACPI 2.0+ support
 
@@ -72,44 +68,27 @@ void gather_madt() {
       ;
   }
 
-  madt_ioapics = kmalloc(sizeof(madt_ioapic_t *));
-  madt_lapics = kmalloc(sizeof(madt_lapic_t *));
-  madt_nmis = kmalloc(sizeof(madt_nmi_t *));
-  madt_isos = kmalloc(sizeof(madt_iso_t *));
+  madt_ioapics.data = kmalloc(sizeof(madt_ioapic_t *));
+  madt_lapics.data = kmalloc(sizeof(madt_lapic_t *));
+  madt_nmis.data = kmalloc(sizeof(madt_nmi_t *));
+  madt_isos.data = kmalloc(sizeof(madt_iso_t *));
 
   for (size_t i = 0; i < (madt->header.length - (sizeof(madt_t)));) {
     madt_header_t *header = (madt_header_t *)&madt->entries[i];
 
     switch (header->id) {
     case 0:
-      madt_lapics[lapic_len++] = (madt_lapic_t *)header;
-      madt_lapic_t **lapic_re =
-          kmalloc(sizeof(madt_lapic_t *) * (lapic_len + 1));
-      memcpy(lapic_re, madt_lapics, (sizeof(madt_lapic_t *) * lapic_len));
-      kfree(madt_lapics);
-      madt_lapics = lapic_re;
+      vec_push(&madt_lapics, (madt_lapic_t *)header);
       break;
+
     case 1:
-      madt_ioapics[ioapic_len++] = (madt_ioapic_t *)header;
-      madt_ioapic_t **ioapic_re =
-          kmalloc(sizeof(madt_ioapic_t *) * (ioapic_len + 1));
-      memcpy(ioapic_re, madt_ioapics, (sizeof(madt_ioapic_t *) * ioapic_len));
-      kfree(madt_ioapics);
-      madt_ioapics = ioapic_re;
+      vec_push(&madt_ioapics, (madt_ioapic_t *)header);
       break;
     case 2:
-      madt_nmis[nmi_len++] = (madt_nmi_t *)header;
-      madt_nmi_t **nmi_re = kmalloc(sizeof(madt_nmi_t *) * (nmi_len + 1));
-      memcpy(nmi_re, madt_nmis, (sizeof(madt_nmi_t *) * nmi_len));
-      kfree(madt_nmis);
-      madt_nmis = nmi_re;
+      vec_push(&madt_nmis, (madt_nmi_t *)header);
       break;
     case 3:
-      madt_isos[iso_len++] = (madt_iso_t *)header;
-      madt_iso_t **iso_re = kmalloc(sizeof(madt_iso_t *) * (iso_len + 1));
-      memcpy(iso_re, madt_isos, (sizeof(madt_iso_t *) * iso_len));
-      kfree(madt_isos);
-      madt_isos = iso_re;
+      vec_push(&madt_isos, (madt_iso_t *)header);
       break;
     }
 

@@ -1,4 +1,5 @@
 #include <cpu_locals.h>
+#include <drivers/serial.h>
 #include <printf.h>
 #include <registers.h>
 #include <stdint.h>
@@ -110,11 +111,34 @@ int init_isr() {
 
   return 0;
 }
+char *itoa(size_t i, char b[]) {
+  char const digit[] = "0123456789abcdef";
+  char *p = b;
+  /* if (i < 0) { */
+  /* *p++ = '-'; */
+  /* i *= -1; */
+  /* } */
+  size_t shifter = i;
+  do { // Move to where representation ends
+    ++p;
+    shifter = shifter / 16;
+  } while (shifter);
+  *p = '\0';
+  do { // Move back, inserting digits as u go
+    *--p = digit[i % 16];
+    i = i / 16;
+  } while (i);
+  return b;
+}
 
 void c_isr_handler(uint64_t ex_no, uint64_t rsp) {
-  (void)rsp;
-  printf("\r\nCPU %lu: %s: FAULT!\r\n", get_locals()->cpu_number,
-         exception_messages[ex_no]);
+  printf("\r\nCPU %lu: %s at %lx\r\n", get_locals()->cpu_number,
+         exception_messages[ex_no], ((registers_t *)rsp)->rip);
+
+  char x[100];
+  itoa(((registers_t *)rsp)->rip, x);
+  serial_print(x);
+
   while (1)
     asm volatile("cli\n"
                  "hlt\n");

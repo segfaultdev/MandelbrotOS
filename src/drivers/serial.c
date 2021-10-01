@@ -12,6 +12,8 @@
 
 #define SERIAL_LINE_ENABLE_DLAB (0x80)
 
+static volatile lock_t serial_lock = {0};
+
 void serial_conf_baud_rate(uint16_t base, uint16_t divisor) {
   outb(SERIAL_LINE_COMMAND_PORT(base), SERIAL_LINE_ENABLE_DLAB);
 
@@ -32,27 +34,43 @@ void serial_conf_modem(uint16_t base) {
 }
 
 int init_serial_port(uint16_t base, uint16_t divisor) {
+
   outb(SERIAL_DATA_PORT(base) + 1, 0x00);
   serial_conf_baud_rate(base, divisor);
   serial_conf_line(base);
   serial_conf_buff(base);
   serial_conf_modem(base);
+
   return 0;
 }
 
 int serial_is_transmit_fifo_empty(uint32_t base) {
-  return inb(SERIAL_LINE_STATUS(base)) & 20;
+  LOCK(serial_lock);
+
+  int out = inb(SERIAL_LINE_STATUS(base)) & 20;
+
+  UNLOCK(serial_lock);
+
+  return out;
 }
 
 void serial_write_byte_port(uint16_t base, char byte) {
+  LOCK(serial_lock);
+
   outb(SERIAL_DATA_PORT(base), byte);
+
+  UNLOCK(serial_lock);
 }
 
 void serial_write_port(uint16_t base, char *buf, size_t len) {
+  LOCK(serial_lock);
+
   while (!serial_is_transmit_fifo_empty(base))
     ;
   for (uint32_t i = 0; i < len; i++)
     serial_write_byte_port(base, buf[i]);
+
+  UNLOCK(serial_lock);
 }
 
 void serial_print_port(uint16_t base, char *buf) {
@@ -63,19 +81,21 @@ void serial_print_port(uint16_t base, char *buf) {
 }
 
 int init_serial() {
+  LOCK(serial_lock);
+
   init_serial_port(SERIAL_COM1_BASE, 3);
   /* init_serial_port(SERIAL_COM2_BASE, 3); */
   /* init_serial_port(SERIAL_COM3_BASE, 3); */
   /* init_serial_port(SERIAL_COM4_BASE, 3); */
 
+  UNLOCK(serial_lock);
+
   return 0;
 }
 
 void serial_print(char *buf) {
-  MAKE_LOCK(serial_print_lock);
   serial_print_port(SERIAL_COM1_BASE, buf);
   /* serial_print_port(SERIAL_COM2_BASE, buf); */
   /* serial_print_port(SERIAL_COM3_BASE, buf); */
   /* serial_print_port(SERIAL_COM4_BASE, buf); */
-  UNLOCK(serial_print_lock);
 }

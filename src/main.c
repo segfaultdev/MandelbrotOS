@@ -42,24 +42,9 @@ void k_thread() {
   klog(init_pit(), "PIT");
   klog(init_pcspkr(), "PC speaker");
 
-  /* while (1) { */
-    /* char x[6]; */
-    /* x[0] = '1'; */
-    /* x[1] = ':'; */
-    /* x[2] = ' '; */
-    /* x[3] = get_locals()->cpu_number + '0'; */
-    /* x[4] = '\n'; */
-    /* x[5] = 0; */
-    /* serial_print(x); */
-    /* for (volatile size_t i = 0; i < 5000000; i++) */
-      /* asm volatile("nop"); */
-  /* } */
-
   while (1)
     ;
 }
-
-extern void jmp();
 
 void kernel_main(struct stivale2_struct *bootloader_info) {
   struct stivale2_struct_tag_framebuffer *framebuffer_info =
@@ -86,14 +71,10 @@ void kernel_main(struct stivale2_struct *bootloader_info) {
   disable_pic();
 
   klog(init_fb(framebuffer_info), "Framebuffer");
-  klog(init_heap(), "Heap");
   klog(init_acpi(rsdp_info), "ACPI");
-
-  klog(scheduler_init((uintptr_t)k_thread), "Scheduler");
   klog(init_smp(smp_info), "SMP");
 
-  await();
-
+  scheduler_init((uintptr_t)k_thread, smp_info);
   while (1)
     ;
 }

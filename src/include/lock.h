@@ -1,6 +1,7 @@
 #ifndef __LOCK_H__
 #define __LOCK_H__
 
+#include <stdbool.h>
 #include <stdint.h>
 
 // Based on lyre-os' spinlock system.
@@ -26,31 +27,21 @@ typedef struct {
 
 #define LOCKED_INC(VAR)                                                        \
   ({                                                                           \
-    int ret;                                                                   \
+    bool ret;                                                                  \
     asm volatile("lock incl %1" : "=@ccnz"(ret) : "m"(VAR) : "memory");        \
     ret;                                                                       \
   })
 
 #define LOCKED_DEC(VAR)                                                        \
   ({                                                                           \
-    int ret;                                                                   \
+    bool ret;                                                                  \
     asm volatile("lock decl %1" : "=@ccnz"(ret) : "m"(VAR) : "memory");        \
     ret;                                                                       \
   })
 
-#define LOCK_ACQUIRE(LOCK)                                                     \
-  ({                                                                           \
-    int ret;                                                                   \
-    asm volatile("lock btsl $0, %0"                                            \
-                 : "+m"((LOCK).bits), "=@ccc"(ret)                             \
-                 :                                                             \
-                 : "memory");                                                  \
-    !ret;                                                                      \
-  })
-
 #define LOCK(LOCK)                                                             \
   ({                                                                           \
-    int ret;                                                                   \
+    bool ret;                                                                  \
     LOCKED_INC((LOCK).waiting_refcount);                                       \
     asm volatile("1: lock btsl $0, %0\n\t"                                     \
                  "jnc 1f\n\t"                                                  \
@@ -66,13 +57,21 @@ typedef struct {
     !ret;                                                                      \
   })
 
+#define LOCK_ACQUIRE(LOCK)                                                     \
+  ({                                                                           \
+    bool ret;                                                                  \
+    asm volatile("lock btsl $0, %0"                                            \
+                 : "+m"((LOCK).bits), "=@ccc"(ret)                             \
+                 :                                                             \
+                 : "memory");                                                  \
+    !ret;                                                                      \
+  })
+
 #define UNLOCK(LOCK)                                                           \
   ({ asm volatile("lock btrl $0, %0" : "+m"((LOCK).bits) : : "memory"); })
 
-#define DECLARE_LOCK(name) static volatile lock_t name
-
 #define MAKE_LOCK(name)                                                        \
-  DECLARE_LOCK(name);                                                          \
-  LOCK(name);
+  static volatile lock_t name = {0};                                           \
+  LOCK(name)
 
 #endif

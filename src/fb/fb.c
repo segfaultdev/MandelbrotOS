@@ -14,6 +14,8 @@ uint32_t curr_bg_col = 0x000000;
 
 static int curr_x = 0, curr_y = 0;
 
+static volatile lock_t fb_lock = {0};
+
 int init_fb(struct stivale2_struct_tag_framebuffer *framebuffer_info) {
   framebuffer = (uint32_t *)framebuffer_info->framebuffer_addr;
   fb_width = framebuffer_info->framebuffer_width;
@@ -22,21 +24,21 @@ int init_fb(struct stivale2_struct_tag_framebuffer *framebuffer_info) {
 }
 
 void set_bg(uint32_t bg_col) {
-  MAKE_LOCK(set_bg_lock);
+  LOCK(fb_lock);
   curr_bg_col = bg_col;
-  UNLOCK(set_bg_lock);
+  UNLOCK(fb_lock);
 }
 
 void set_fg(uint32_t fg_col) {
-  MAKE_LOCK(set_fg_lock);
+  LOCK(fb_lock);
   curr_fg_col = fg_col;
-  UNLOCK(set_fg_lock);
+  UNLOCK(fb_lock);
 }
 
 void putpixel(int x, int y, uint32_t color) {
-  MAKE_LOCK(putpixel_lock);
+  LOCK(fb_lock);
   framebuffer[y * fb_width + x] = color;
-  UNLOCK(putpixel_lock);
+  UNLOCK(fb_lock);
 }
 
 void putnc(int x, int y, char c, uint32_t fgc, uint32_t bgc) {
@@ -100,7 +102,7 @@ void putc(char c, uint32_t fgc, uint32_t bgc) {
 }
 
 void putchar(char c) {
-  MAKE_LOCK(putchar_lock);
+  LOCK(fb_lock);
   putc(c, curr_fg_col, curr_bg_col);
-  UNLOCK(putchar_lock);
+  UNLOCK(fb_lock);
 }

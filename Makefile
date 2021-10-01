@@ -27,9 +27,9 @@ CFLAGS := \
 	-O3 \
 	-Isrc/include \
 	-mgeneral-regs-only \
-	-mno-red-zone \
 	-pipe \
-        -fno-pic -no-pie \
+	-mno-red-zone \
+	-fno-pic -no-pie \
 	-fno-stack-protector \
 	-Wno-implicit-fallthrough \
 	-Wno-maybe-uninitialized \
@@ -40,7 +40,6 @@ LDFLAGS := \
 	-Tresources/linker.ld \
 	-nostdlib \
 	-z max-page-size=0x1000
-
 
 CFILES := $(shell find src/ -name '*.c')
 ASFILES := $(shell find src/ -name '*.asm')
