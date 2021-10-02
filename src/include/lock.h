@@ -26,21 +26,21 @@ typedef struct {
 
 #define LOCKED_INC(VAR)                                                        \
   ({                                                                           \
-    int ret;                                                                  \
+    int ret;                                                                   \
     asm volatile("lock incl %1" : "=@ccnz"(ret) : "m"(VAR) : "memory");        \
     ret;                                                                       \
   })
 
 #define LOCKED_DEC(VAR)                                                        \
   ({                                                                           \
-    int ret;                                                                  \
+    int ret;                                                                   \
     asm volatile("lock decl %1" : "=@ccnz"(ret) : "m"(VAR) : "memory");        \
     ret;                                                                       \
   })
 
 #define LOCK(LOCK)                                                             \
   ({                                                                           \
-    int ret;                                                                  \
+    int ret;                                                                   \
     LOCKED_INC((LOCK).waiting_refcount);                                       \
     asm volatile("1: lock btsl $0, %0\n\t"                                     \
                  "jnc 1f\n\t"                                                  \
@@ -58,7 +58,7 @@ typedef struct {
 
 #define LOCK_ACQUIRE(LOCK)                                                     \
   ({                                                                           \
-    int ret;                                                                  \
+    int ret;                                                                   \
     asm volatile("lock btsl $0, %0"                                            \
                  : "+m"((LOCK).bits), "=@ccc"(ret)                             \
                  :                                                             \

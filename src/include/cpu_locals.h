@@ -13,6 +13,7 @@ typedef struct cpu_locals {
   size_t cpu_number;
   size_t lapic_id;
   thread_t *current_thread;
+  int is_idle;
 } cpu_locals_t;
 
 static inline cpu_locals_t *get_locals() {
@@ -22,5 +23,7 @@ static inline cpu_locals_t *get_locals() {
 static inline void set_locals(cpu_locals_t *local) {
   wrmsr(0xc0000101, (uint64_t)local);
 }
+
+extern cpu_locals_t *cpu_locals;
 
 #endif

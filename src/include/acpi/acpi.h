@@ -20,7 +20,7 @@ extern sdt_t *facp;
 
 extern vec_madt_lapic madt_lapics;
 extern vec_madt_ioapic madt_ioapics;
-extern vec_madt_nmi madt_nmis; 
+extern vec_madt_nmi madt_nmis;
 extern vec_madt_iso madt_isos;
 
 int init_acpi(struct stivale2_struct_tag_rsdp *rsdp_info);

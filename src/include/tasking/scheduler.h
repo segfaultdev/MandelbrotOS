@@ -33,7 +33,15 @@ typedef struct thread {
   registers_t registers;
 } thread_t;
 
+typedef vec_t(thread_t *) vec_thread_t;
+typedef vec_t(proc_t *) vec_proc_t;
+
+extern vec_thread_t threads;
+extern vec_proc_t processes;
+
 void scheduler_init(uintptr_t addr, struct stivale2_struct_tag_smp *smp_info);
+thread_t *create_kernel_thread(char *name, uintptr_t addr, size_t time_slice,
+                               proc_t *mother_proc);
 void await_sched_start();
 void await();
 

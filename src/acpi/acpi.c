@@ -17,7 +17,7 @@ madt_t *madt;
 
 vec_madt_lapic madt_lapics;
 vec_madt_ioapic madt_ioapics;
-vec_madt_nmi madt_nmis; 
+vec_madt_nmi madt_nmis;
 vec_madt_iso madt_isos;
 
 // TODO: ACPI 2.0+ support

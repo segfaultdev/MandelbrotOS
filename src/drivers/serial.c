@@ -63,14 +63,10 @@ void serial_write_byte_port(uint16_t base, char byte) {
 }
 
 void serial_write_port(uint16_t base, char *buf, size_t len) {
-  LOCK(serial_lock);
-
   while (!serial_is_transmit_fifo_empty(base))
     ;
   for (uint32_t i = 0; i < len; i++)
     serial_write_byte_port(base, buf[i]);
-
-  UNLOCK(serial_lock);
 }
 
 void serial_print_port(uint16_t base, char *buf) {

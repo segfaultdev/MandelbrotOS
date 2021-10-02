@@ -19,4 +19,7 @@ void lapic_timer_get_freq();
 void ioapic_redirect_irq(uint8_t lapic_id, uint8_t irq, uint8_t vect,
                          int status);
 
+
+void lapic_send_ipi(uint8_t lapic_id, uint8_t vect);
+
 #endif

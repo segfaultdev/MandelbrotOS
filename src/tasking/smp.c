@@ -32,6 +32,7 @@ void init_cpu(struct stivale2_smp_info *smp_info) {
   locals->last_run_thread_index = 0;
   locals->lapic_id = smp_info->lapic_id;
   locals->current_thread = NULL;
+  locals->is_idle = 0;
 
   set_locals(locals);
 

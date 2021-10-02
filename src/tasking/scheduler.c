@@ -22,22 +22,19 @@
 #define ALIVE 0
 #define DEAD 1
 
+size_t cpu_count;
+
 static volatile int sched_started = 0;
 
 size_t current_tid = 0;
 size_t current_pid = 0;
 
-static vec_t(thread_t *) threads = {};
-static vec_t(proc_t *) processes = {};
+vec_thread_t threads = {};
+vec_proc_t processes = {};
 
 static volatile lock_t sched_lock = {0};
 
 extern void switch_and_run_stack(uintptr_t stack);
-
-void k_idle() {
-  while (1)
-    ;
-}
 
 void enqueue_thread(thread_t *thread) {
   LOCK(sched_lock);
@@ -100,6 +97,10 @@ void enqueue_proc(proc_t *proc) {
 
   vec_push(&processes, proc);
   proc->enqueued = 1;
+
+  for (size_t i = 0; i < cpu_count; i++)
+    if (LOCKED_READ(cpu_locals[i].is_idle)) 
+      lapic_send_ipi(cpu_locals[i].lapic_id, SCHEDULE_REG);
 
   UNLOCK(sched_lock);
 }
@@ -199,6 +200,8 @@ void schedule(uint64_t rsp) {
   cpu_locals_t *locals = get_locals();
   thread_t *current_thread = locals->current_thread;
 
+  locals->is_idle = 0;
+
   if (!LOCK_ACQUIRE(sched_lock)) {
     size_t slice = current_thread ? current_thread->time_slice : 20000;
     lapic_eoi();
@@ -214,12 +217,13 @@ void schedule(uint64_t rsp) {
   }
 
   if (new_index == (size_t)-1) {
-    printf("Bump");
-    locals->last_run_thread_index = 0;
     locals->current_thread = NULL;
-    UNLOCK(sched_lock);
+    locals->last_run_thread_index = 0;
+    locals->is_idle = 1;
     lapic_eoi();
-    await();
+    UNLOCK(sched_lock);
+    asm volatile("hlt");
+    while (1);
   }
 
   current_thread = LOCKED_READ(threads.data[new_index]);
@@ -260,12 +264,11 @@ void scheduler_init(uintptr_t addr, struct stivale2_struct_tag_smp *smp_info) {
 
   create_proc("k_proc");
 
-  create_kernel_thread("k_init", (uint64_t)addr, 5000, processes.data[0]);
-
-  for (size_t i = 0; i < smp_info->cpu_count; i++)
-    create_kernel_thread("k_idle", (uintptr_t)k_idle, 5000, processes.data[0]);
+  create_kernel_thread("k_init", (uintptr_t)addr, 5000, processes.data[0]);
+    
+  cpu_count = smp_info->cpu_count;
 
   LOCKED_WRITE(sched_started, 1);
-
+  
   await();
 }
