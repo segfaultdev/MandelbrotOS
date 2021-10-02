@@ -61,7 +61,7 @@ All header files must have an ifndef  with the file name in screaming snake case
 ```
 
 # Extern code
-Mandelbrot uses code that is not it's own. You can see a list of this code and their authors at [AUTHORS.md](https://github.com/MandelbrotOS/MandelbrotOS/AUTHORS.md)
+Mandelbrot uses code that is not it's own. You can see a list of this code and their authors at [AUTHORS.md](/AUTHORS.md)
 
 # Using code
 This is an open source project. Reuse code. Just follow the license terms and we are good. :)
