@@ -102,7 +102,7 @@ void putc(char c, uint32_t fgc, uint32_t bgc) {
 }
 
 void putchar(char c) {
-  LOCK(fb_lock);
+  /* LOCK(fb_lock); */
   putc(c, curr_fg_col, curr_bg_col);
-  UNLOCK(fb_lock);
+  /* UNLOCK(fb_lock); */
 }

@@ -39,9 +39,9 @@ void init_cpu(struct stivale2_smp_info *smp_info) {
   init_lapic();
   lapic_timer_get_freq();
 
-  LOCKED_INC(inited_cpus);
-
   klog(3, "Brought up CPU #%lu\r\n", locals->cpu_number);
+
+  LOCKED_INC(inited_cpus);
 
   if (smp_info->lapic_id != bsp_lapic_id)
     await_sched_start();

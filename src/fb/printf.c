@@ -3,12 +3,15 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <lock.h>
 
 #include <fb/fb.h>
 #include <lock.h>
 #include <printf.h>
 #include <string.h>
 #include <vprintf.h>
+
+static volatile lock_t printf_lock = {0};
 
 // Not my implementation. Taken from https://wiki.osdev.org/User:A22347/Printf
 
@@ -153,6 +156,8 @@ void displayString(char *c, int *a) {
 }
 
 int vprintf(const char *format, va_list list) {
+  LOCK(printf_lock);
+
   int chars = 0;
   char intStrBuffer[256] = {0};
 
@@ -474,6 +479,8 @@ int vprintf(const char *format, va_list list) {
       displayCharacter(format[i], &chars);
     }
   }
+
+  UNLOCK(printf_lock);
 
   return chars;
 }
