@@ -15,5 +15,6 @@ resources/echfs-utils
 resources/limine-install
 resources/limine.sys
 
-# Boch's lock files
+# Boch's temp files
 *.lock
+bx_enh_dbg.ini

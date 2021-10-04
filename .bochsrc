@@ -1,7 +1,7 @@
 memory: guest=2048M, host=2048
 ata0: enabled=1
 boot: c
-com1: enabled=1, mode=file, dev=file.txt
+com1: enabled=1, mode=tty, dev=stdio
 display_library: x, options="gui_debug"
 megs: 512
 clock: sync=realtime, time0=local
