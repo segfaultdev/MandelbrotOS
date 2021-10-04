@@ -88,6 +88,11 @@ qemu_docker: $(HDD)
 	@ $(QEMU_DOCKER)
 
 toolchain:
+	# Init them
+	@ echo "[CLONING SUBMODULES]"
+	@ git submodule init
+	@ git submodule update
+	
 	# Limine
 	@ echo "[BUILD LIMINE]"
 	@ cp -R thirdparty/limine/limine-install-linux-x86_64 resources/limine-install
@@ -99,7 +104,12 @@ toolchain:
 	@ cd thirdparty/echfs; make echfs-utils; make mkfs.echfs
 	@ cp -R thirdparty/echfs/echfs-utils resources
 
-toolchain_nonnative:
+toolchain_nonnative:	
+	# Init them
+	@ echo "[CLONING SUBMODULES]"
+	@ git submodule init
+	@ git submodule update
+	
 	# Limine
 	@ echo "[BUILD LIMINE]"
 	@ cp -R thirdparty/limine/limine-install-linux-x86_64 resources/limine-install
