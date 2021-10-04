@@ -1,9 +1,9 @@
+#include <lock.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
-#include <lock.h>
 
 #include <fb/fb.h>
 #include <lock.h>

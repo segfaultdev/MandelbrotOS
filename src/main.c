@@ -8,6 +8,7 @@
 #include <drivers/serial.h>
 #include <fb/fb.h>
 #include <klog.h>
+#include <main.h>
 #include <mm/kheap.h>
 #include <mm/pmm.h>
 #include <mm/vmm.h>
@@ -46,6 +47,8 @@ void k_thread() {
     ;
 }
 
+static uint32_t stack[0x1000] = {0};
+
 void kernel_main(struct stivale2_struct *bootloader_info) {
   struct stivale2_struct_tag_framebuffer *framebuffer_info =
       (struct stivale2_struct_tag_framebuffer *)stivale2_get_tag(
@@ -60,7 +63,7 @@ void kernel_main(struct stivale2_struct *bootloader_info) {
       (struct stivale2_struct_tag_smp *)stivale2_get_tag(
           bootloader_info, STIVALE2_STRUCT_TAG_SMP_ID);
 
-  init_gdt();
+  init_gdt((uintptr_t)stack);
   init_idt();
   init_isr();
   init_irq();
@@ -75,6 +78,4 @@ void kernel_main(struct stivale2_struct *bootloader_info) {
   klog(init_smp(smp_info), "SMP");
 
   scheduler_init((uintptr_t)k_thread, smp_info);
-  while (1)
-    ;
 }

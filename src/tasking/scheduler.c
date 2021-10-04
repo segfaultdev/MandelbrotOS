@@ -99,7 +99,7 @@ void enqueue_proc(proc_t *proc) {
   proc->enqueued = 1;
 
   for (size_t i = 0; i < cpu_count; i++)
-    if (LOCKED_READ(cpu_locals[i].is_idle)) 
+    if (LOCKED_READ(cpu_locals[i].is_idle))
       lapic_send_ipi(cpu_locals[i].lapic_id, SCHEDULE_REG);
 
   UNLOCK(sched_lock);
@@ -223,7 +223,8 @@ void schedule(uint64_t rsp) {
     lapic_eoi();
     UNLOCK(sched_lock);
     asm volatile("hlt");
-    while (1);
+    while (1)
+      ;
   }
 
   current_thread = LOCKED_READ(threads.data[new_index]);
@@ -265,10 +266,10 @@ void scheduler_init(uintptr_t addr, struct stivale2_struct_tag_smp *smp_info) {
   create_proc("k_proc");
 
   create_kernel_thread("k_init", (uintptr_t)addr, 5000, processes.data[0]);
-    
+
   cpu_count = smp_info->cpu_count;
 
   LOCKED_WRITE(sched_started, 1);
-  
+
   await();
 }
