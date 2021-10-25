@@ -52,10 +52,11 @@ void enqueue_thread(thread_t *thread) {
   UNLOCK(sched_lock);
 }
 
-thread_t *create_thread_template(char *name, uintptr_t addr, size_t time_slice,
-                                 uint64_t code_segment, uint64_t data_segment,
-                                 proc_t *mother_proc, int auto_enqueue) {
+thread_t *create_thread(char *name, uintptr_t addr, size_t time_slice, int user,
+                        int auto_enqueue, proc_t *mother_proc) {
   thread_t *new_thread = kmalloc(sizeof(thread_t));
+
+  uint64_t stack = (uint64_t)pcalloc(1);
 
   *new_thread = (thread_t){
       .tid = current_tid++,
@@ -66,25 +67,24 @@ thread_t *create_thread_template(char *name, uintptr_t addr, size_t time_slice,
       .enqueued = 0,
       .registers =
           (registers_t){
-              .cs = code_segment,
-              .ss = data_segment,
+              .cs = (user) ? GDT_SEG_UCODE : GDT_SEG_KCODE,
+              .ss = (user) ? GDT_SEG_UDATA : GDT_SEG_KDATA,
               .rip = (uint64_t)addr,
               .rflags = 0x202,
-              .rsp = (uint64_t)pcalloc(1) + PAGE_SIZE + PHYS_MEM_OFFSET,
           },
       .time_slice = (time_slice == 0) ? 5000 : time_slice,
   };
+
+  if (user) {
+    new_thread->kernel_stack = (uint64_t)pcalloc(1) + PHYS_MEM_OFFSET + PAGE_SIZE;
+  }
+
+  new_thread->registers.rsp = stack + PHYS_MEM_OFFSET + PAGE_SIZE;
 
   if (auto_enqueue)
     enqueue_thread(new_thread);
 
   return new_thread;
-}
-
-thread_t *create_kernel_thread(char *name, uintptr_t addr, size_t time_slice,
-                               proc_t *mother_proc) {
-  return create_thread_template(name, addr, time_slice, GDT_SEG_KCODE,
-                                GDT_SEG_KDATA, mother_proc, 1);
 }
 
 void enqueue_proc(proc_t *proc) {
@@ -105,14 +105,14 @@ void enqueue_proc(proc_t *proc) {
   UNLOCK(sched_lock);
 }
 
-proc_t *create_proc(char *name) {
+proc_t *create_proc(char *name, int user) {
   proc_t *new_proc = kmalloc(sizeof(proc_t));
 
   *new_proc = (proc_t){
       .name = name,
       .thread_count = 0,
       .pid = current_pid++,
-      .pagemap = (uint64_t)get_kernel_pagemap(),
+      .pagemap = (user) ? create_new_pagemap() : &kernel_pagemap,
       .enqueued = 0,
   };
 
@@ -203,9 +203,8 @@ void schedule(uint64_t rsp) {
   locals->is_idle = 0;
 
   if (!LOCK_ACQUIRE(sched_lock)) {
-    size_t slice = current_thread ? current_thread->time_slice : 20000;
     lapic_eoi();
-    lapic_timer_oneshot(SCHEDULE_REG, slice);
+    lapic_timer_oneshot(SCHEDULE_REG, current_thread ? current_thread->time_slice : 20000);
     switch_and_run_stack((uintptr_t)rsp);
   }
 
@@ -231,7 +230,9 @@ void schedule(uint64_t rsp) {
   locals->current_thread = current_thread;
   locals->last_run_thread_index = new_index;
 
-  asm volatile("mov %0, %%cr3" : : "r"(current_thread->mother_proc->pagemap));
+  locals->tss.rsp[0] = current_thread->kernel_stack;
+
+  vmm_load_pagemap(current_thread->mother_proc->pagemap);
 
   lapic_eoi();
   lapic_timer_oneshot(SCHEDULE_REG, current_thread->time_slice);
@@ -259,13 +260,19 @@ void await_sched_start() {
   await();
 }
 
+void user_thread() {
+  while (1)
+    ;
+}
+
 void scheduler_init(uintptr_t addr, struct stivale2_struct_tag_smp *smp_info) {
   processes.data = kcalloc(sizeof(proc_t *));
   threads.data = kcalloc(sizeof(thread_t *));
 
-  create_proc("k_proc");
+  proc_t *kernel_proc = create_proc("k_proc", 0);
 
-  create_kernel_thread("k_init", (uintptr_t)addr, 5000, processes.data[0]);
+  create_thread("k_init", addr, 5000, 0, 1, kernel_proc);
+  create_thread("u_test", (uintptr_t)user_thread, 5000, 1, 1, kernel_proc);
 
   cpu_count = smp_info->cpu_count;
 

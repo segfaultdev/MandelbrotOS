@@ -6,6 +6,7 @@
 
 #include <boot/stivale2.h>
 #include <lock.h>
+#include <mm/vmm.h>
 #include <registers.h>
 #include <vec.h>
 
@@ -15,7 +16,7 @@ typedef struct proc {
   char *name;
   int status;
   int enqueued;
-  uint64_t pagemap;
+  pagemap_t *pagemap;
   size_t pid;
   size_t thread_count;
   vec_t(struct thread *) threads;
@@ -29,6 +30,7 @@ typedef struct thread {
   lock_t lock;
   size_t tid;
   size_t time_slice;
+  uint64_t kernel_stack;
   proc_t *mother_proc;
   registers_t registers;
 } thread_t;

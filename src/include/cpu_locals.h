@@ -13,6 +13,7 @@ typedef struct cpu_locals {
   size_t cpu_number;
   size_t lapic_id;
   thread_t *current_thread;
+  tss_t tss;
   int is_idle;
 } cpu_locals_t;
 

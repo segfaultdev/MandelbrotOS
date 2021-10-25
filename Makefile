@@ -6,7 +6,7 @@ AS = nasm
 
 # QEMU = qemu-system-$(ARCH) -hdd $(HDD) -smp 1 -M q35 -soundhw pcspk -serial stdio
 QEMU = qemu-system-$(ARCH) -hdd $(HDD) -smp 2 -M q35 -soundhw pcspk -serial stdio
-# QEMU = qemu-system-$(ARCH) -hdd $(HDD) -smp 1 -M q35 -soundhw pcspk -monitor stdio -d int
+# QEMU = qemu-system-$(ARCH) -hdd $(HDD) -smp 2 -M q35 -soundhw pcspk -monitor stdio -d int
 
 QEMU_DOCKER = $(QEMU) -curses
 

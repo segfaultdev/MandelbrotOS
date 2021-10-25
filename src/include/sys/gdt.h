@@ -53,7 +53,7 @@ typedef struct gdt {
 } __attribute__((packed)) gdt_t;
 
 void load_gdt();
-
-int init_gdt(uintptr_t kernel_stack);
+void set_and_load_tss(uintptr_t addr);
+int init_gdt();
 
 #endif

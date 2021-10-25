@@ -18,16 +18,14 @@ static uint32_t bsp_lapic_id;
 static size_t inited_cpus = 0;
 
 void init_cpu(struct stivale2_smp_info *smp_info) {
-  /* smp_info = (void *)smp_info + PHYS_MEM_OFFSET; */
-  /* smp_info += PHYS_MEM_OFFSET; */
-
   if (smp_info->lapic_id != bsp_lapic_id) {
     load_gdt();
     load_idt();
-    /* vmm_switch_map_to_kern(); */
   }
 
   cpu_locals_t *locals = (cpu_locals_t *)smp_info->extra_argument;
+
+  set_and_load_tss((uintptr_t)&locals->tss);
 
   locals->last_run_thread_index = 0;
   locals->lapic_id = smp_info->lapic_id;

@@ -1,10 +1,11 @@
 #include <stdint.h>
 #include <sys/gdt.h>
+#include <lock.h>
+
+static volatile lock_t gdt_lock = {0};
 
 static gdt_t gdt;
 static gdt_pointer_t gdt_ptr;
-
-static tss_t tss = {0};
 
 void load_gdt() {
   asm volatile("lgdt %0" : : "m"(gdt_ptr) : "memory");
@@ -39,7 +40,7 @@ void load_tss(uint16_t segment) {
                : "ax");
 }
 
-int init_gdt(uintptr_t kernel_stack) {
+int init_gdt() {
   gdt_ptr.limit = sizeof(gdt) - 1;
   gdt_ptr.base = (uint64_t)&gdt;
 
@@ -77,23 +78,26 @@ int init_gdt(uintptr_t kernel_stack) {
                              .granularity = 0x0,
                              .base_high = 0}; // User data descriptor
 
+  load_gdt();
+
+  return 0;
+}
+
+void set_and_load_tss(uintptr_t addr) {
+  LOCK(gdt_lock);
+
   gdt.tss = (tss_entry_t){
       .length = sizeof(tss_entry_t),
-      .base_low = (uintptr_t)&tss & 0xffff,
-      .base_mid = ((uintptr_t)&tss >> 16) & 0xff,
+      .base_low = addr & 0xffff,
+      .base_mid = (addr >> 16) & 0xff,
       .flags1 = 0b10001001,
       .flags2 = 0,
-      .base_high = ((uintptr_t)&tss >> 24) & 0xff,
-      .base_upper = (uintptr_t)&tss >> 32,
+      .base_high = (addr >> 24) & 0xff,
+      .base_upper = addr >> 32,
       .reserved = 0,
   };
 
-  tss.rsp[0] = (uintptr_t)kernel_stack;
-  tss.iopb_offset = sizeof(tss);
-
-  load_gdt();
-
   load_tss(GDT_SEG_TSS);
 
-  return 0;
+  UNLOCK(gdt_lock);
 }
