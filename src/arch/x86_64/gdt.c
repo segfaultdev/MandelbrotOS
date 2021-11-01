@@ -1,6 +1,6 @@
+#include <lock.h>
 #include <stdint.h>
 #include <sys/gdt.h>
-#include <lock.h>
 
 static volatile lock_t gdt_lock = {0};
 

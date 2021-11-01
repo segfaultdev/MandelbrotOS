@@ -19,6 +19,7 @@ typedef struct proc {
   pagemap_t *pagemap;
   size_t pid;
   size_t thread_count;
+  uintptr_t virtual_stack_top;
   vec_t(struct thread *) threads;
 } proc_t;
 

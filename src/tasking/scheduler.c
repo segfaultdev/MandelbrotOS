@@ -76,10 +76,19 @@ thread_t *create_thread(char *name, uintptr_t addr, size_t time_slice, int user,
   };
 
   if (user) {
-    new_thread->kernel_stack = (uint64_t)pcalloc(1) + PHYS_MEM_OFFSET + PAGE_SIZE;
-  }
+    /* uintptr_t virt_map_addr = mother_proc->virtual_stack_top; */
 
-  new_thread->registers.rsp = stack + PHYS_MEM_OFFSET + PAGE_SIZE;
+    mother_proc->virtual_stack_top += PAGE_SIZE;
+
+    vmm_map_page(mother_proc->pagemap, stack, 0x70000000000, 0b11);
+    vmm_set_memory_flags(mother_proc->pagemap, 0x70000000000, 0b111);
+
+    new_thread->registers.rsp = 0x70000000000 + PAGE_SIZE;
+
+    new_thread->kernel_stack =
+        (uint64_t)pcalloc(1) + PHYS_MEM_OFFSET + PAGE_SIZE;
+  } else
+    new_thread->registers.rsp = stack + PHYS_MEM_OFFSET + PAGE_SIZE;
 
   if (auto_enqueue)
     enqueue_thread(new_thread);
@@ -113,6 +122,7 @@ proc_t *create_proc(char *name, int user) {
       .thread_count = 0,
       .pid = current_pid++,
       .pagemap = (user) ? create_new_pagemap() : &kernel_pagemap,
+      .virtual_stack_top = 0,
       .enqueued = 0,
   };
 
@@ -195,6 +205,8 @@ size_t get_next_thread(size_t orig_i) {
 }
 
 void schedule(uint64_t rsp) {
+  vmm_load_pagemap(&kernel_pagemap);
+
   lapic_timer_stop();
 
   cpu_locals_t *locals = get_locals();
@@ -204,7 +216,8 @@ void schedule(uint64_t rsp) {
 
   if (!LOCK_ACQUIRE(sched_lock)) {
     lapic_eoi();
-    lapic_timer_oneshot(SCHEDULE_REG, current_thread ? current_thread->time_slice : 20000);
+    lapic_timer_oneshot(SCHEDULE_REG,
+                        current_thread ? current_thread->time_slice : 20000);
     switch_and_run_stack((uintptr_t)rsp);
   }
 
@@ -232,12 +245,18 @@ void schedule(uint64_t rsp) {
 
   locals->tss.rsp[0] = current_thread->kernel_stack;
 
-  vmm_load_pagemap(current_thread->mother_proc->pagemap);
-
   lapic_eoi();
   lapic_timer_oneshot(SCHEDULE_REG, current_thread->time_slice);
 
   UNLOCK(sched_lock);
+
+  vmm_load_pagemap(current_thread->mother_proc->pagemap);
+
+  /* printf("TID: %lu\r\nKern_map:%p\r\nUser_map:%p\r\n", current_thread->tid,
+   * kernel_pagemap.top_level, current_thread->mother_proc->pagemap->top_level);
+   */
+
+  /* while (1); */
 
   switch_and_run_stack((uintptr_t)&current_thread->registers);
 }
@@ -270,9 +289,10 @@ void scheduler_init(uintptr_t addr, struct stivale2_struct_tag_smp *smp_info) {
   threads.data = kcalloc(sizeof(thread_t *));
 
   proc_t *kernel_proc = create_proc("k_proc", 0);
+  proc_t *user_proc = create_proc("u_proc", 1);
 
   create_thread("k_init", addr, 5000, 0, 1, kernel_proc);
-  create_thread("u_test", (uintptr_t)user_thread, 5000, 1, 1, kernel_proc);
+  create_thread("u_test", (uintptr_t)user_thread, 5000, 1, 1, user_proc);
 
   cpu_count = smp_info->cpu_count;
 
