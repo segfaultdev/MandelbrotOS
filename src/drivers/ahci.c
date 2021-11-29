@@ -169,6 +169,9 @@ int sata_read(size_t portno, uint64_t start, uint32_t count, uint8_t *buf) {
   cmd_header->prdtl = (uint16_t)((count - 1) >> 4) + 1;
 
   hba_cmd_tbl_t *cmd_table = (hba_cmd_tbl_t *)(uintptr_t)cmd_header->ctba;
+  memset(cmd_table, 0,
+         sizeof(hba_cmd_tbl_t) +
+             (cmd_header->prdtl - 1) * sizeof(hba_prdt_entry_t));
 
   size_t i;
   for (i = 0; i < (size_t)cmd_header->prdtl - 1; i++) {
@@ -192,6 +195,91 @@ int sata_read(size_t portno, uint64_t start, uint32_t count, uint8_t *buf) {
   cmd_fis->fis_type = FIS_TYPE_REG_HOST_TO_DEVICE;
   cmd_fis->c = 1;
   cmd_fis->command = ATA_CMD_READ_DMA_EX;
+
+  cmd_fis->lba0 = (uint8_t)startl;
+  cmd_fis->lba1 = (uint8_t)(startl >> 8);
+  cmd_fis->lba2 = (uint8_t)(startl >> 16);
+  cmd_fis->device = 1 << 6;
+
+  cmd_fis->lba3 = (uint8_t)(startl >> 24);
+  cmd_fis->lba4 = (uint8_t)(starth);
+  cmd_fis->lba5 = (uint8_t)(starth >> 8);
+
+  cmd_fis->countl = (count & 0xFF);
+  cmd_fis->counth = (count >> 8);
+
+  for (uint32_t spin = 0; spin < 1000000; spin++) {
+    if (!(port->tfd & (ATA_DEV_BUSY | ATA_DEV_DRQ)))
+      break;
+  }
+  if ((port->tfd & (ATA_DEV_BUSY | ATA_DEV_DRQ)))
+    return 1;
+
+  port->ci = (1 << slot);
+
+  while (1) {
+    if (!(port->ci & (1 << slot)))
+      break;
+    if (port->is & HBA_PXIS_TFES)
+      return 1;
+  }
+
+  if (port->is & HBA_PXIS_TFES)
+    return 1;
+
+  return 0;
+}
+
+int sata_write(size_t portno, uint64_t start, uint32_t count, uint8_t *buf) {
+  if (portno > (size_t)sata_ports.length - 1)
+    return 1;
+
+  hba_port_t *port = sata_ports.data[portno];
+
+  uint32_t startl = (uint32_t)start;
+  uint32_t starth = (uint32_t)(start >> 32);
+
+  port->is = (uint32_t)-1;
+
+  int8_t slot = find_cmdslot(port);
+  if (slot == -1)
+    return 1;
+
+  hba_cmd_header_t *cmd_header = (hba_cmd_header_t *)(uintptr_t)(port->clb);
+  cmd_header += slot;
+  cmd_header->cfl = sizeof(fis_reg_host_to_device_t) / sizeof(uint32_t);
+  cmd_header->w = 1;
+  cmd_header->c = 1;
+  cmd_header->p = 1;
+  cmd_header->prdtl = (uint16_t)((count - 1) >> 4) + 1;
+
+  hba_cmd_tbl_t *cmd_table = (hba_cmd_tbl_t *)(uintptr_t)cmd_header->ctba;
+  memset(cmd_table, 0,
+         sizeof(hba_cmd_tbl_t) +
+             (cmd_header->prdtl - 1) * sizeof(hba_prdt_entry_t));
+
+  size_t i;
+  for (i = 0; i < (size_t)cmd_header->prdtl - 1; i++) {
+    cmd_table->prdt_entry[i].dba = (uint32_t)(uintptr_t)(buf - PHYS_MEM_OFFSET);
+    cmd_table->prdt_entry[i].dbau = 0;
+    cmd_table->prdt_entry[i].dbc = 8 * 1024 - 1; // 8Kb - 1
+    cmd_table->prdt_entry[i].i = 1;
+
+    buf += 8 * 1024;
+    count -= 16;
+  }
+
+  cmd_table->prdt_entry[i].dba =
+      (uint32_t)(uintptr_t)((uint64_t)buf - PHYS_MEM_OFFSET);
+  cmd_table->prdt_entry[i].dbc = (count << 9) - 1;
+  cmd_table->prdt_entry[i].i = 1;
+
+  fis_reg_host_to_device_t *cmd_fis =
+      (fis_reg_host_to_device_t *)(&cmd_table->cfis);
+
+  cmd_fis->fis_type = FIS_TYPE_REG_HOST_TO_DEVICE;
+  cmd_fis->c = 1;
+  cmd_fis->command = ATA_CMD_WRITE_DMA_EX;
 
   cmd_fis->lba0 = (uint8_t)startl;
   cmd_fis->lba1 = (uint8_t)(startl >> 8);
@@ -259,21 +347,36 @@ int init_sata() {
 
   init_abars();
 
-  uint8_t *chars = kmalloc(sizeof(uint8_t) * 512);
+  /* uint8_t *chars = kmalloc(sizeof(uint8_t) * 512); */
 
-  for (size_t i = 0; i < 512; i++) {
-    printf("%x ", chars[i]);
-  }
+  /* uint8_t cleans[512] = {0}; */
 
-  if (!sata_read(0, 0, 1, chars)) {
-    printf("\r\n\n\nSuccess on reading disk!\r\n");
+  /* for (size_t i = 0; i < 512; i++) { */
+    /* printf("%x ", chars[i]); */
+  /* } */
 
-    for (size_t i = 0; i < 512; i++) {
-      printf("%x ", chars[i]);
-    }
+  /* if (!sata_read(0, 0, 1, chars)) { */
+    /* printf("\r\n\n\nSuccess on reading disk!\r\n"); */
 
-    printf("\r\n");
-  }
+    /* for (size_t i = 0; i < 512; i++) { */
+      /* printf("%x ", chars[i]); */
+    /* } */
+
+    /* printf("\r\n"); */
+  /* } */
+
+  /* if (!sata_write(0, 0, 1, cleans)) { */
+    /* printf("Wrote successfully!\r\n"); */
+    /* if (!sata_read(0, 0, 1, chars)) { */
+      /* printf("\r\n\n\nSuccess on reading disk!\r\n"); */
+
+      /* for (size_t i = 0; i < 512; i++) { */
+        /* printf("%x ", chars[i]); */
+      /* } */
+
+      /* printf("\r\n"); */
+    /* } */
+  /* } */
 
   return 0;
 }
