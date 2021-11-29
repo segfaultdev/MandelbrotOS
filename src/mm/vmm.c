@@ -6,24 +6,17 @@
 #include <stdint.h>
 
 static volatile lock_t vmm_lock = {0};
-
 pagemap_t kernel_pagemap;
 
 static uint64_t *get_next_level(uint64_t *table, size_t index, uint64_t flags) {
-  /* if (!(table[index] & 1)) { */
-  /* table[index] = (uint64_t)pcalloc(1); */
-  /* table[index] |= 0b111; */
-  /* } */
-  /* return (uint64_t *)((table[index] & ~(0xfff)) + PHYS_MEM_OFFSET); */
   uint64_t *ret = 0;
-
-  uint64_t *entry = (void *)table + PHYS_MEM_OFFSET + index * 8;
+  uint64_t *entry = (void *)((uint64_t)table + PHYS_MEM_OFFSET) + index * 8;
 
   if ((entry[0] & 1) != 0)
     ret = (uint64_t *)(entry[0] & (uint64_t)~0xfff);
   else {
     ret = pmalloc(1);
-    entry[0] = (uint64_t)ret | 0b111;
+    entry[0] = (uint64_t)ret | flags;
   }
 
   return ret;
@@ -57,8 +50,7 @@ void vmm_map_page(pagemap_t *pagemap, uintptr_t physical_address,
   UNLOCK(pagemap->lock);
 }
 
-void vmm_unmap_page(pagemap_t *pagemap, uintptr_t virtual_address,
-                    uint64_t flags) {
+void vmm_unmap_page(pagemap_t *pagemap, uintptr_t virtual_address) {
   LOCK(pagemap->lock);
 
   size_t pml4_entry = (virtual_address & ((uint64_t)0x1ff << 39)) >> 39;
@@ -90,6 +82,7 @@ void vmm_set_memory_flags(pagemap_t *pagemap, uintptr_t virtual_address,
 
   *(uint64_t *)((uint64_t)pml1[pml1_entry] + PHYS_MEM_OFFSET) &=
       ~(uint64_t)0xfff;
+
   *(uint64_t *)((uint64_t)pml1[pml1_entry] + PHYS_MEM_OFFSET) |= flags;
 }
 
@@ -119,12 +112,12 @@ int init_vmm() {
     get_next_level(kernel_pagemap.top_level, i, 0b111);
 
   for (uintptr_t i = PAGE_SIZE; i < 0x100000000; i += PAGE_SIZE) {
-    vmm_map_page(&kernel_pagemap, i, i, 0b11);
-    vmm_map_page(&kernel_pagemap, i, i + PHYS_MEM_OFFSET, 0b11);
+    vmm_map_page(&kernel_pagemap, i, i, 0b111);
+    vmm_map_page(&kernel_pagemap, i, i + PHYS_MEM_OFFSET, 0b111);
   }
 
   for (uintptr_t i = 0; i < 0x80000000; i += PAGE_SIZE)
-    vmm_map_page(&kernel_pagemap, i, i + KERNEL_MEM_OFFSET, 0b11);
+    vmm_map_page(&kernel_pagemap, i, i + KERNEL_MEM_OFFSET, 0b111);
 
   vmm_load_pagemap(&kernel_pagemap);
 

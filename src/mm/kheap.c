@@ -16,9 +16,9 @@
 static volatile lock_t liballoc_slock = {0};
 
 void *liballoc_alloc(int size) {
-  void *ptr = pcalloc(ROUNDUP(size, PAGE_SIZE));
+  uintptr_t ptr = (uintptr_t)pcalloc(ROUNDUP(size, PAGE_SIZE));
   ptr += PHYS_MEM_OFFSET;
-  return ptr;
+  return (void *)ptr;
 }
 
 int liballoc_free_(void *ptr, int pages) {

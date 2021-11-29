@@ -29,11 +29,11 @@ void disable_pic() {
   outb(0x21, 0xff);
 }
 
-uint32_t lapic_read(size_t reg) {
+static inline uint32_t lapic_read(size_t reg) {
   return *((uint32_t *)(((rdmsr(0x1b) & 0xfffff000) + PHYS_MEM_OFFSET) + reg));
 }
 
-void lapic_write(size_t reg, uint32_t data) {
+static inline void lapic_write(size_t reg, uint32_t data) {
   *((uint32_t *)(((rdmsr(0x1b) & 0xfffff000) + PHYS_MEM_OFFSET) + reg)) = data;
 }
 
@@ -93,12 +93,12 @@ void lapic_timer_oneshot(uint8_t intr, uint32_t us) {
   lapic_write(LAPIC_REG_TIMER_INITCNT, (uint64_t)ticks);
 }
 
-uint32_t ioapic_read(uintptr_t addr, size_t reg) {
+static inline uint32_t ioapic_read(uintptr_t addr, size_t reg) {
   *((volatile uint32_t *)(addr + IOAPIC_REG_IOREGSEL)) = reg;
   return *((volatile uint32_t *)(addr + IOAPIC_REG_IOWIN));
 }
 
-void ioapic_write(uintptr_t addr, size_t reg, uint32_t data) {
+static inline void ioapic_write(uintptr_t addr, size_t reg, uint32_t data) {
   *((volatile uint32_t *)(addr + IOAPIC_REG_IOREGSEL)) = reg;
   *((volatile uint32_t *)(addr + IOAPIC_REG_IOWIN)) = data;
 }

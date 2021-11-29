@@ -67,37 +67,37 @@ void knewline() {
 
 void putc(char c, uint32_t fgc, uint32_t bgc) {
   switch (c) {
-  case '\n':
-    if (curr_y + FONT_HEIGHT > fb_height)
-      knewline();
-    else
-      curr_y += FONT_HEIGHT;
-    break;
-  case '\r':
-    curr_x = 0;
-    break;
-  case '\b':
-    if (curr_x - FONT_WIDTH < 0 && curr_y - FONT_HEIGHT < 0)
-      ;
-    else if (curr_x - FONT_WIDTH < 0) {
-      curr_y -= FONT_HEIGHT;
-      curr_x = fb_width - (fb_width & FONT_WIDTH) - FONT_WIDTH;
-      putnc(curr_x, curr_y, ' ', fgc, bgc);
-    } else {
-      curr_x -= FONT_WIDTH;
-      putnc(curr_x, curr_y, ' ', fgc, bgc);
-    }
-    break;
-  default:
-    if (curr_x + FONT_WIDTH > fb_width) {
-      curr_x = 0;
+    case '\n':
       if (curr_y + FONT_HEIGHT > fb_height)
         knewline();
       else
         curr_y += FONT_HEIGHT;
-    }
-    putnc(curr_x, curr_y, c, fgc, bgc);
-    curr_x += FONT_WIDTH;
+      break;
+    case '\r':
+      curr_x = 0;
+      break;
+    case '\b':
+      if (curr_x - FONT_WIDTH < 0 && curr_y - FONT_HEIGHT < 0)
+        ;
+      else if (curr_x - FONT_WIDTH < 0) {
+        curr_y -= FONT_HEIGHT;
+        curr_x = fb_width - (fb_width & FONT_WIDTH) - FONT_WIDTH;
+        putnc(curr_x, curr_y, ' ', fgc, bgc);
+      } else {
+        curr_x -= FONT_WIDTH;
+        putnc(curr_x, curr_y, ' ', fgc, bgc);
+      }
+      break;
+    default:
+      if (curr_x + FONT_WIDTH > fb_width) {
+        curr_x = 0;
+        if (curr_y + FONT_HEIGHT > fb_height)
+          knewline();
+        else
+          curr_y += FONT_HEIGHT;
+      }
+      putnc(curr_x, curr_y, c, fgc, bgc);
+      curr_x += FONT_WIDTH;
   }
 }
 

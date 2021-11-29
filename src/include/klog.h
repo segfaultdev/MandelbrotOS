@@ -3,6 +3,7 @@
 
 #include <stdarg.h>
 
+void klog_init(int type, char *message);
 void klog(int type, char *message, ...);
 
 #endif

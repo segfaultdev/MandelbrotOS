@@ -1,6 +1,7 @@
 #include <acpi/acpi.h>
 #include <boot/stivale2.h>
 #include <cpu_locals.h>
+#include <drivers/ahci.h>
 #include <drivers/apic.h>
 #include <drivers/kbd.h>
 #include <drivers/pcspkr.h>
@@ -37,11 +38,12 @@ void *stivale2_get_tag(struct stivale2_struct *stivale2_struct, uint64_t id) {
 
 void k_thread() {
   klog(3, "Scheduler started and running\r\n");
-  klog(init_serial(), "Serial");
-  klog(init_kbd(), "Keyboard");
-  klog(pci_enumerate(), "PCI");
-  klog(init_pit(), "PIT");
-  klog(init_pcspkr(), "PC speaker");
+  klog_init(init_serial(), "Serial");
+  klog_init(init_kbd(), "Keyboard");
+  klog_init(pci_enumerate(), "PCI");
+  klog_init(init_pit(), "PIT");
+  klog_init(init_pcspkr(), "PC speaker");
+  klog_init(init_sata(), "SATA");
 
   while (1)
     ;
@@ -71,9 +73,9 @@ void kernel_main(struct stivale2_struct *bootloader_info) {
 
   disable_pic();
 
-  klog(init_fb(framebuffer_info), "Framebuffer");
-  klog(init_acpi(rsdp_info), "ACPI");
-  klog(init_smp(smp_info), "SMP");
+  klog_init(init_fb(framebuffer_info), "Framebuffer");
+  klog_init(init_acpi(rsdp_info), "ACPI");
+  klog_init(init_smp(smp_info), "SMP");
 
   scheduler_init((uintptr_t)k_thread, smp_info);
 }

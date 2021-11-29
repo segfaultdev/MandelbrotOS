@@ -8,6 +8,7 @@ cross/
 
 # Editor specific files
 compile_flags.txt
+.ccls
 
 # Resources
 resources/BOOTX64.EFI

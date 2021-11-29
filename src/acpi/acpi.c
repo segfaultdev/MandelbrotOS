@@ -77,19 +77,19 @@ void gather_madt() {
     madt_header_t *header = (madt_header_t *)&madt->entries[i];
 
     switch (header->id) {
-    case 0:
-      vec_push(&madt_lapics, (madt_lapic_t *)header);
-      break;
+      case 0:
+        vec_push(&madt_lapics, (madt_lapic_t *)header);
+        break;
 
-    case 1:
-      vec_push(&madt_ioapics, (madt_ioapic_t *)header);
-      break;
-    case 2:
-      vec_push(&madt_nmis, (madt_nmi_t *)header);
-      break;
-    case 3:
-      vec_push(&madt_isos, (madt_iso_t *)header);
-      break;
+      case 1:
+        vec_push(&madt_ioapics, (madt_ioapic_t *)header);
+        break;
+      case 2:
+        vec_push(&madt_nmis, (madt_nmi_t *)header);
+        break;
+      case 3:
+        vec_push(&madt_isos, (madt_iso_t *)header);
+        break;
     }
 
     i += header->length;

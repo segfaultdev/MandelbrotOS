@@ -76,14 +76,12 @@ thread_t *create_thread(char *name, uintptr_t addr, size_t time_slice, int user,
   };
 
   if (user) {
-    /* uintptr_t virt_map_addr = mother_proc->virtual_stack_top; */
+    uintptr_t stack_top = mother_proc->virtual_stack_top;
+    mother_proc->virtual_stack_top -= PAGE_SIZE;
 
-    mother_proc->virtual_stack_top += PAGE_SIZE;
+    vmm_map_page(mother_proc->pagemap, stack, stack_top, 0b111);
 
-    vmm_map_page(mother_proc->pagemap, stack, 0x70000000000, 0b11);
-    vmm_set_memory_flags(mother_proc->pagemap, 0x70000000000, 0b111);
-
-    new_thread->registers.rsp = 0x70000000000 + PAGE_SIZE;
+    new_thread->registers.rsp = stack_top + PAGE_SIZE;
 
     new_thread->kernel_stack =
         (uint64_t)pcalloc(1) + PHYS_MEM_OFFSET + PAGE_SIZE;
@@ -122,7 +120,7 @@ proc_t *create_proc(char *name, int user) {
       .thread_count = 0,
       .pid = current_pid++,
       .pagemap = (user) ? create_new_pagemap() : &kernel_pagemap,
-      .virtual_stack_top = 0,
+      .virtual_stack_top = 0x70000000000,
       .enqueued = 0,
   };
 
@@ -251,12 +249,6 @@ void schedule(uint64_t rsp) {
   UNLOCK(sched_lock);
 
   vmm_load_pagemap(current_thread->mother_proc->pagemap);
-
-  /* printf("TID: %lu\r\nKern_map:%p\r\nUser_map:%p\r\n", current_thread->tid,
-   * kernel_pagemap.top_level, current_thread->mother_proc->pagemap->top_level);
-   */
-
-  /* while (1); */
 
   switch_and_run_stack((uintptr_t)&current_thread->registers);
 }
