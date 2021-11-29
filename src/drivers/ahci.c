@@ -114,22 +114,20 @@ void stop_cmd_engine(hba_port_t *port) {
   }
 }
 
-void port_rebase(hba_port_t *port, size_t portno) {
+void port_init(hba_port_t *port) {
   stop_cmd_engine(port);
 
-  uint64_t ahci_base = (uint64_t)pcalloc(32);
-
-  port->clb = ahci_base + (portno << 10);
+  port->clb = (uint32_t)(uint64_t)pcalloc(1);
   port->clbu = 0;
 
-  port->fb = ahci_base + (32 << 10) + (portno << 8);
+  port->fb = (uint32_t)(uint64_t)pcalloc(1);
   port->fbu = 0;
 
   hba_cmd_header_t *cmd_header = (hba_cmd_header_t *)(uint64_t)(port->clb);
 
   for (int i = 0; i < 32; i++) {
     cmd_header[i].prdtl = 8;
-    cmd_header[i].ctba = ahci_base + (40 << 10) + (portno << 13) + (i << 8);
+    cmd_header[i].ctba = (uint32_t)(uint64_t)pcalloc(1);
     cmd_header[i].ctbau = 0;
   }
 
@@ -236,7 +234,7 @@ void init_abars() {
     for (uint32_t i = 0, pi = abar->pi; i < 32; i++, pi >>= 1) {
       if (pi & 1) {
         if (check_type(&abar->ports[i]) == AHCI_DEV_SATA) {
-          port_rebase(&abar->ports[i], i);
+          port_init(&abar->ports[i]);
           vec_push(&sata_ports, &abar->ports[i]);
         }
       }
