@@ -56,7 +56,7 @@ void klog(int type, char *message, ...) {
   va_end(list);
 }
 
-void klog_init(int type, char *message) {
+int klog_init(int type, char *message) {
   uint32_t old_fg = curr_fg_col;
 
   switch (type) {
@@ -75,4 +75,6 @@ void klog_init(int type, char *message) {
       printf(" ] %s not initialized \r\n", message);
       break;
   }
+
+  return type;
 }

@@ -38,7 +38,7 @@
 #define ATA_DEV_DRQ 0x08
 
 vec_t(uint64_t) abars = {};
-vec_t(hba_port_t *) sata_ports = {};
+vec_hba_port_t sata_ports = {};
 
 void find_abar(uint64_t base_address, uint64_t bus) {
   uint64_t bus_address = base_address + (bus << 20);
@@ -352,28 +352,28 @@ int init_sata() {
   /* uint8_t cleans[512] = {0}; */
 
   /* for (size_t i = 0; i < 512; i++) { */
-    /* printf("%x ", chars[i]); */
+  /* printf("%x ", chars[i]); */
   /* } */
 
-  /* if (!sata_read(0, 128, 1, chars)) { */
-    /* printf("\r\n\n\nSuccess on reading disk!\r\n"); */
+  /* if (!sata_read(0, 0, 1, chars)) { */
+  /* printf("\r\n\n\nSuccess on reading disk!\r\n"); */
 
-    /* for (size_t i = 0; i < 512; i++) { */
-      /* printf("%x ", chars[i]); */
-    /* } */
+  /* for (size_t i = 0; i < 512; i++) { */
+  /* printf("%x ", chars[i]); */
+  /* } */
   /* } */
 
   /* if (!sata_write(0, 0, 1, cleans)) { */
-    /* printf("Wrote successfully!\r\n"); */
-    /* if (!sata_read(0, 0, 1, chars)) { */
-      /* printf("\r\n\n\nSuccess on reading disk!\r\n"); */
+  /* printf("Wrote successfully!\r\n"); */
+  /* if (!sata_read(0, 0, 1, chars)) { */
+  /* printf("\r\n\n\nSuccess on reading disk!\r\n"); */
 
-      /* for (size_t i = 0; i < 512; i++) { */
-        /* printf("%x ", chars[i]); */
-      /* } */
+  /* for (size_t i = 0; i < 512; i++) { */
+  /* printf("%x ", chars[i]); */
+  /* } */
 
-      /* printf("\r\n"); */
-    /* } */
+  /* printf("\r\n"); */
+  /* } */
   /* } */
 
   return 0;

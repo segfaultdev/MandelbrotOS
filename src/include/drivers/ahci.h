@@ -1,7 +1,9 @@
 #ifndef __AHCI_H__
-
 #define __AHCI_H__
+
+#include <stddef.h>
 #include <stdint.h>
+#include <vec.h>
 
 enum {
   FIS_TYPE_REG_HOST_TO_DEVICE = 0x27,
@@ -183,6 +185,12 @@ typedef struct hba_cmd_tbl {
   hba_prdt_entry_t prdt_entry[1];
 } __attribute__((packed)) hba_cmd_tbl_t;
 
+typedef vec_t(hba_port_t *) vec_hba_port_t;
+
+extern vec_hba_port_t sata_ports;
+
+int sata_read(size_t portno, uint64_t start, uint32_t count, uint8_t *buf);
+int sata_write(size_t portno, uint64_t start, uint32_t count, uint8_t *buf);
 int init_sata();
 
 #endif

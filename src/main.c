@@ -4,6 +4,7 @@
 #include <drivers/ahci.h>
 #include <drivers/apic.h>
 #include <drivers/kbd.h>
+#include <drivers/mbr.h>
 #include <drivers/pcspkr.h>
 #include <drivers/pit.h>
 #include <drivers/serial.h>
@@ -43,7 +44,11 @@ void k_thread() {
   klog_init(pci_enumerate(), "PCI");
   klog_init(init_pit(), "PIT");
   klog_init(init_pcspkr(), "PC speaker");
-  klog_init(init_sata(), "SATA");
+  if (klog_init(init_sata(), "SATA"))
+    while (1)
+      ;
+
+  klog(parse_mbr(), "Master boot record parsed\r\n");
 
   while (1)
     ;
