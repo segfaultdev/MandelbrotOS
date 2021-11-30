@@ -12,13 +12,13 @@ It's like tracing OS history, but with modern knowledge and without a lot of bud
 # Build Requirements
 
 ### Arch/Manjaro
-- `sudo pacman -S base-devel qemu nasm xorriso mtools wget`
+- `sudo pacman -S base-devel qemu nasm mtools`
 
 ### Debian/Ubuntu
-- `sudo apt-get install build-essential qemu nasm xorriso wget mtools uuid-dev parted`
+- `sudo apt-get install build-essential qemu nasm mtools`
 
 # Building the Toolchain
-Mandelbrot depends on some tools, like `limine-install`, `echfs-utils` and the GNU Toolchain.  
+Mandelbrot depends on some tools, like the limine bootloader and the GNU Toolchain.  
 If you are on an x86\_64 system run  
 ```
 make toolchain
@@ -41,24 +41,26 @@ It will run the QEMU emulator by default.
 By default the OS does nothing as we don't have a userland but stuff can be added to the kernel for testing purposes. There will often be remaining test code that is left over.
 
 # Commiting
-We code using GCC so any clang standards that may affect GCC will be ignored.   
-We also format our code in clang format so make sure to clang format the code before commiting.  
-We code in gnu99 standards. So this is C99 with GNU extensions. It is automatically set in the makefile. Just beware of that when coding.  
-When returning an error code from a function: make sure that returning 0 is success code. All other return codes are errors/failures and can be used to show what went wrong.  
-Name variables in snake case (`uint64_t name_of_var`)  
-Give types \_t's (`typedef long int name_of_type_t`). Make sure this is in snake case too!  
-Constants must be in screaming snake case (All capitals snake case) (`#define SOME_CONSTANT 0x1000`)    
-Macros follow the same laws as constants. (`#define MAX(a, b) ({int \_a = (a), \_b = (b); \_a > \_b ? \_a : \_b; })`)  
-All comments are allowed but I would prefer if you used `//` instead of `/**/`  
-All header files must have an ifndef  with the file name in screaming snake case with double underscores on each side of them like this:  
-```c
-#ifndef __SOME_FILE_NAME_H__
-#define __SOME_FILE_NAME_H__
+Mandelbrot is coded to some specific standards. They are
 
-// Code
+- Use snake\_case for all variables and functions  
+- Use SCREAMING\_SNAKE\_CASE for all constants  
+- Use include guards in all header files and make sure they follow the following format:
+```c
+#ifndef __FILENAME_H__
+#define __FILENAME_H__
+
+// Code here
 
 #endif
-```
+
+```   
+- Try to structure the file so that you include everything first, declare all variables second and then write all functions last   
+- Code in GNU99 compatible C and NASM compatible assembler
+- Use stdint.h and stddef.h variable declerations for standard number sizes
+- Make sure all custom typedefs end it `_t` 
+- Once everything is done, clang format with the command `bash -c 'find src/. -type f \\( -iname \\*.h -o -iname \\*.c \\) -exec clang-format -i -style="{IndentWidth: 2,TabWidth: 2,IndentGotoLabels: true,IndentCaseLabels: true,KeepEmptyLinesAtTheStartOfBlocks: true}" {} \\;'`
+
 
 # Extern code
 Mandelbrot uses code that is not it's own. You can see a list of this code and their authors at [AUTHORS.md](/AUTHORS.md)

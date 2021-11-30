@@ -56,12 +56,15 @@ all: $(HDD) qemu
 $(HDD): $(KERNEL)
 	@ echo "[HDD]"
 	@ dd if=/dev/zero of=$@ bs=1M seek=64 count=0
-	@ parted -s $@ mklabel gpt
-	@ parted -s $@ mkpart primary 2048s 100%
-	@ ./resources/echfs-utils -g -p0 $@ quick-format 512
-	@ ./resources/echfs-utils -g -p0 $@ import resources/limine.cfg boot/limine.cfg
-	@ ./resources/echfs-utils -g -p0 $@ import resources/limine.sys boot/limine.sys
-	@ ./resources/echfs-utils -g -p0 $@ import $< boot/kernel
+	@ echo "drive c: file=\"$@\" partition=1" > resources/mtoolsrc
+	@ MTOOLSRC=resources/mtoolsrc mpartition -I -s 64 -t 256 -h 8 c:
+	@ MTOOLSRC=resources/mtoolsrc mpartition -c -b 128 -l 1048448 c:
+	@ MTOOLSRC=resources/mtoolsrc mpartition -a c:
+	@ MTOOLSRC=resources/mtoolsrc mformat -c 8 -F c:
+	@ MTOOLSRC=resources/mtoolsrc mmd c:/boot
+	@ MTOOLSRC=resources/mtoolsrc mcopy resources/limine.cfg c:/boot
+	@ MTOOLSRC=resources/mtoolsrc mcopy resources/limine.sys c:/boot
+	@ MTOOLSRC=resources/mtoolsrc mcopy $< c:/boot/kernel
 	@ ./resources/limine-install $@
 
 $(KERNEL): $(OBJ)
@@ -98,11 +101,6 @@ toolchain:
 	@ cp -R thirdparty/limine/limine-install-linux-x86_64 resources/limine-install
 	@ cp -R thirdparty/limine/limine.sys resources
 	@ cp -R thirdparty/limine/BOOTX64.EFI resources
-	 
-	# Echfs
-	@ echo "[BUILD ECHFS]"
-	@ cd thirdparty/echfs; make echfs-utils; make mkfs.echfs
-	@ cp -R thirdparty/echfs/echfs-utils resources
 
 toolchain_nonnative:	
 	# Init them
@@ -115,11 +113,6 @@ toolchain_nonnative:
 	@ cp -R thirdparty/limine/limine-install-linux-x86_64 resources/limine-install
 	@ cp -R thirdparty/limine/limine.sys resources
 	@ cp -R thirdparty/limine/BOOTX64.EFI resources
-	 
-	# Echfs
-	@ echo "[BUILD ECHFS]"
-	@ cd thirdparty/echfs; make echfs-utils; make mkfs.echfs
-	@ cp -R thirdparty/echfs/echfs-utils resources
 	 
 	# Cross compiler
 	@ echo "[BUILD CROSS COMPILER]"

@@ -355,14 +355,12 @@ int init_sata() {
     /* printf("%x ", chars[i]); */
   /* } */
 
-  /* if (!sata_read(0, 0, 1, chars)) { */
+  /* if (!sata_read(0, 128, 1, chars)) { */
     /* printf("\r\n\n\nSuccess on reading disk!\r\n"); */
 
     /* for (size_t i = 0; i < 512; i++) { */
       /* printf("%x ", chars[i]); */
     /* } */
-
-    /* printf("\r\n"); */
   /* } */
 
   /* if (!sata_write(0, 0, 1, cleans)) { */
