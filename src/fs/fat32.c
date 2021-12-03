@@ -5,48 +5,52 @@
 #include <mm/pmm.h>
 #include <printf.h>
 
-vec_t(fat_partition_t) fat_partitions;
+vec_t(fat_partition_t) fat_parts;
 
-uint64_t fat_cluster_to_sector(size_t fat_part, uint32_t cluster) {
-  return ((cluster - 2) * fat_partitions.data[fat_part].boot.cluster_size) +
-         (fat_partitions.data[fat_part].boot.reserved_sectors +
-          (fat_partitions.data[fat_part].boot.table_count *
-           fat_partitions.data[fat_part].boot.sectors_per_fat) +
-          (((fat_partitions.data[fat_part].boot.root_entries * 32) +
-            (fat_partitions.data[fat_part].boot.sector_size - 1)) /
-           fat_partitions.data[fat_part].boot.sector_size));
+uint64_t fat_cluster_to_sector(size_t part, uint32_t cluster) {
+  return ((cluster - 2) * fat_parts.data[part].boot.cluster_size) +
+         (fat_parts.data[part].boot.reserved_sectors +
+          (fat_parts.data[part].boot.table_count *
+           fat_parts.data[part].boot.sectors_per_fat) +
+          (((fat_parts.data[part].boot.root_entries * 32) +
+            (fat_parts.data[part].boot.sector_size - 1)) /
+           fat_parts.data[part].boot.sector_size));
 }
 
-uint32_t fat_get_next_cluster(size_t fat_part, uint32_t cluster) {
+uint32_t fat_get_next_cluster(size_t part, uint32_t cluster) {
   uint8_t buf[512];
-  uint64_t fat_sector = fat_partitions.data[fat_part].sector_start +
-                        fat_partitions.data[fat_part].boot.reserved_sectors +
+  uint64_t fat_sector = fat_parts.data[part].sector_start +
+                        fat_parts.data[part].boot.reserved_sectors +
                         ((cluster * 4) / 512);
   uint32_t fat_offset = (cluster * 4) % 512;
 
-  sata_read(fat_partitions.data[fat_part].drive, fat_sector, 1, buf);
+  sata_read(fat_parts.data[part].drive, fat_sector, 1, buf);
   uint8_t *cluster_chain = (uint8_t *)buf;
 
   return *((uint32_t *)&cluster_chain[fat_offset]) & 0x0FFFFFFF;
 }
 
-uint32_t fat_load_cluster(size_t fat_part, uint8_t *buffer, uint32_t cluster) {
-  sata_read(fat_partitions.data[fat_part].drive,
-            fat_cluster_to_sector(fat_part, cluster) +
-                fat_partitions.data[fat_part].sector_start,
-            fat_partitions.data[fat_part].boot.cluster_size, buffer);
+uint32_t fat_load_cluster(size_t part, uint8_t *buffer, uint32_t cluster) {
+  sata_read(fat_parts.data[part].drive,
+            fat_cluster_to_sector(part, cluster) +
+                fat_parts.data[part].sector_start,
+            fat_parts.data[part].boot.cluster_size, buffer);
 
-  return fat_get_next_cluster(fat_part, cluster);
+  return fat_get_next_cluster(part, cluster);
 }
 
-void fat_list_dir(size_t fat_part, uint32_t directory) {
-  fat_partition_t fat_partition = fat_partitions.data[fat_part];
+void fat_list_dir(size_t part, uint32_t directory) {
+  fat_partition_t partition = fat_parts.data[part];
 
-  uint8_t *buffer = kmalloc(512 * fat_partition.boot.cluster_size);
-  fat_load_cluster(fat_part, buffer, directory);
+  if (!directory)
+    directory = partition.boot.root_cluster;
+
+  uint8_t *buffer = kmalloc(512 * partition.boot.cluster_size);
+  fat_load_cluster(part, buffer, directory);
+
   fat_cluster_t *cluster;
 
-  while (directory >= 2 && directory < 0x0FFFFFF7) {
+  while (1) {
     cluster = (void *)buffer;
 
     if (!cluster->filename[0]) {
@@ -118,8 +122,82 @@ void fat_list_dir(size_t fat_part, uint32_t directory) {
   kfree(buffer);
 }
 
+uint32_t fat_find(size_t part, uint32_t directory, fat_cluster_t *cluster_copy,
+                  char *path) {
+  if (directory >= 0x0FFFFFF7)
+    return 0x0FFFFFFF;
+  if (!directory)
+    directory = fat_parts.data[part].boot.root_cluster;
+  if (!path)
+    return directory;
+  if (!strlen(path))
+    return directory;
+
+  if (path[0] == ' ' || path[0] == '/')
+    return fat_find(part, directory, cluster_copy, ++path);
+
+  char name[12] = "            ";
+  uint8_t pos = 0;
+
+  while (*path) {
+    if (pos == 11)
+      break;
+    if (*path == '/')
+      break;
+
+    if (*path == '.') {
+      if (pos < 8)
+        pos = 8;
+    } else if (*path >= 'a' && *path <= 'z')
+      name[pos++] = (*path - 'a') + 'A';
+    else
+      name[pos++] = *path;
+
+    path++;
+  }
+
+  size_t size = fat_parts.data[part].boot.cluster_size;
+
+  uint8_t *buffer = kmalloc(size);
+
+  fat_load_cluster(part, buffer, directory);
+
+  while (directory >= 2 && directory < 0x0FFFFFF7) {
+    for (size_t i = 0; i < size * 512 / 32; i++, buffer += 32) {
+      fat_cluster_t *cluster = (void *)buffer;
+
+      if (cluster->flags == 0xf || !cluster->filename[0] ||
+          cluster->filename[0] == 0xE5)
+        continue;
+
+      if (!strncmp(name, (char *)cluster->filename, 11)) {
+        uint32_t cluster_no = ((uint32_t)(cluster->cluster_hi) << 16) |
+                              (uint32_t)(cluster->cluster_lo);
+
+        if (*path == '/' && cluster->directory) {
+          kfree(buffer);
+          cluster_no = fat_find(part, cluster_no, cluster_copy, path + 1);
+        } else {
+          kfree(buffer);
+
+          if (cluster_copy)
+            *cluster_copy = *cluster;
+        }
+
+        return cluster_no;
+      }
+    }
+
+    buffer -= size;
+    directory = fat_load_cluster(part, buffer, directory);
+  }
+
+  kfree(buffer);
+  return 0x0FFFFFFF;
+}
+
 int init_fat() {
-  fat_partitions.data = kmalloc(sizeof(fat_partition_t));
+  fat_parts.data = kmalloc(sizeof(fat_partition_t));
 
   for (size_t i = 0; i < (size_t)valid_partitons.length; i++) {
     bpb_t bios_block;
@@ -131,7 +209,7 @@ int init_fat() {
            valid_partitons.data[i].portno,
            valid_partitons.data[i].partition_number);
 
-      fat_partition_t fat_partition = (fat_partition_t){
+      fat_partition_t partition = (fat_partition_t){
           .boot = bios_block,
           .drive = valid_partitons.data[i].portno,
           .partiton = valid_partitons.data[i].partition_number,
@@ -139,14 +217,23 @@ int init_fat() {
           .sector_length = valid_partitons.data[i].length_in_sectors,
       };
 
-      vec_push(&fat_partitions, fat_partition);
+      vec_push(&fat_parts, partition);
     }
   }
 
-  if (!fat_partitions.length)
+  if (!fat_parts.length)
     return 1;
 
-  fat_list_dir(0, fat_partitions.data[0].boot.root_cluster);
+  fat_cluster_t cluster;
+  uint8_t *buffer = kmalloc(512);
+  fat_load_cluster(0, buffer, fat_find(0, 0, &cluster, "/boot/limine.cfg"));
+
+  for (size_t i = 0; i < cluster.size; i++) {
+    if (buffer[i] == '\n')
+      puts("\r\n");
+    else
+      putchar(buffer[i]);
+  }
 
   return 0;
 }
