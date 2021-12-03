@@ -9,7 +9,6 @@
 
 #include <mm/kheap.h>
 #include <mm/liballoc.h>
-#include <printf.h>
 #include <string.h>
 
 static inline int vec_expand_(char **data, int *length, int *capacity,

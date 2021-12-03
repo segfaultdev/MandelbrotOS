@@ -9,6 +9,7 @@
 #include <drivers/pit.h>
 #include <drivers/serial.h>
 #include <fb/fb.h>
+#include <fs/fat32.h>
 #include <klog.h>
 #include <main.h>
 #include <mm/kheap.h>
@@ -49,6 +50,7 @@ void k_thread() {
       ;
 
   klog(parse_mbr(), "Master boot record parsed\r\n");
+  klog(init_fat(), "FAT filesystem");
 
   while (1)
     ;
