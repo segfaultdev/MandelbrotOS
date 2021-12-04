@@ -222,6 +222,8 @@ uint32_t fat_find(size_t part, uint32_t directory,
 
         path_name[pos] = 0;
 
+        buffer -= 32;
+
         if (!strncmp((char *)path_name, (char *)long_filename, count * 13)) {
           uint32_t cluster_no = ((uint32_t)(cluster->cluster_hi) << 16) |
                                 (uint32_t)(cluster->cluster_lo);
