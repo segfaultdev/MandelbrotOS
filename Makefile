@@ -64,7 +64,6 @@ $(HDD): $(KERNEL)
 	@ MTOOLSRC=resources/mtoolsrc mmd c:/boot
 	@ MTOOLSRC=resources/mtoolsrc mcopy resources/limine.cfg c:/boot
 	@ MTOOLSRC=resources/mtoolsrc mcopy resources/limine.sys c:/boot
-	@ MTOOLSRC=resources/mtoolsrc mcopy ./averylongfile.withaverylongextension c:/
 	@ MTOOLSRC=resources/mtoolsrc mcopy $< c:/boot/kernel
 	@ ./resources/limine-install $@
 
