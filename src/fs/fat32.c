@@ -122,21 +122,23 @@ void fat_list_dir(size_t part, uint32_t directory) {
   kfree(buffer);
 }
 
-uint32_t fat_find(size_t part, uint32_t directory, fat_cluster_t *cluster_copy,
-                  char *path) {
+uint32_t fat_find(size_t part, uint32_t directory,
+                  fat_cluster_t *parent_cluster, char *path) {
+  fat_partition_t partition = fat_parts.data[part];
+
   if (directory >= 0x0FFFFFF7)
     return 0x0FFFFFFF;
   if (!directory)
-    directory = fat_parts.data[part].boot.root_cluster;
+    directory = partition.boot.root_cluster;
   if (!path)
     return directory;
   if (!strlen(path))
     return directory;
 
   if (path[0] == ' ' || path[0] == '/')
-    return fat_find(part, directory, cluster_copy, ++path);
+    return fat_find(part, directory, parent_cluster, ++path);
 
-  char name[12] = "            ";
+  char short_name[12] = "            ";
   uint8_t pos = 0;
 
   while (*path) {
@@ -149,42 +151,119 @@ uint32_t fat_find(size_t part, uint32_t directory, fat_cluster_t *cluster_copy,
       if (pos < 8)
         pos = 8;
     } else if (*path >= 'a' && *path <= 'z')
-      name[pos++] = (*path - 'a') + 'A';
+      short_name[pos++] = (*path - 'a') + 'A';
     else
-      name[pos++] = *path;
+      short_name[pos++] = *path;
 
     path++;
   }
 
-  size_t size = fat_parts.data[part].boot.cluster_size;
-
+  size_t size = partition.boot.cluster_size * 512;
   uint8_t *buffer = kmalloc(size);
-
   fat_load_cluster(part, buffer, directory);
 
   while (directory >= 2 && directory < 0x0FFFFFF7) {
-    for (size_t i = 0; i < size * 512 / 32; i++, buffer += 32) {
+    for (size_t i = 0; i < size / 32; i++, buffer += 32) {
       fat_cluster_t *cluster = (void *)buffer;
 
-      if (cluster->flags == 0xf || !cluster->filename[0] ||
-          cluster->filename[0] == 0xE5)
+      if (!cluster->filename[0] || cluster->filename[0] == 0xE5)
         continue;
 
-      if (!strncmp(name, (char *)cluster->filename, 11)) {
-        uint32_t cluster_no = ((uint32_t)(cluster->cluster_hi) << 16) |
-                              (uint32_t)(cluster->cluster_lo);
+      if (cluster->flags == 0xf) {
+        long_filename_t *lfn = (void *)buffer;
+        size_t count = 0;
 
-        if (*path == '/' && cluster->directory) {
-          kfree(buffer);
-          cluster_no = fat_find(part, cluster_no, cluster_copy, path + 1);
-        } else {
-          kfree(buffer);
-
-          if (cluster_copy)
-            *cluster_copy = *cluster;
+        while (lfn->flags != 0x41) {
+          count++;
+          buffer += 32;
+          lfn = (void *)buffer;
         }
 
-        return cluster_no;
+        buffer -= 32;
+        lfn = (void *)buffer;
+
+        uint8_t *long_filename = kmalloc(
+            count *
+            13); // Each long file name can hold 13 characters (If you convert
+                 // it from normal UTF16 to ASCII because nobody likes UTF16)
+
+        for (size_t j = 0; j < count; j++) {
+          for (size_t i = 0; i < 5; i++)
+            long_filename[j * 13 + i] = lfn->filename_lo[i];
+          for (size_t i = 5; i < 11; i++)
+            long_filename[j * 13 + i] = lfn->filename_mid[i - 5];
+          for (size_t i = 11; i < 13; i++)
+            long_filename[j * 13 + i] = lfn->filename_hi[i - 11];
+
+          buffer -= 32;
+          lfn = (void *)buffer;
+        }
+
+        i += count + 2;
+        buffer += (count + 1) * 32;
+        fat_cluster_t *cluster = (void *)buffer;
+
+        uint8_t *path_name = kmalloc(count * 13);
+
+        for (size_t i = 0; i < count * 13; i++)
+          path_name[i] = 255;
+
+        path -= pos;
+
+        pos = 0;
+        while (*path) {
+          if (*path == '/')
+            break;
+
+          path_name[pos++] = *path;
+
+          path++;
+        }
+
+        path_name[pos] = 0;
+
+        if (!strncmp((char *)path_name, (char *)long_filename, count * 13)) {
+          uint32_t cluster_no = ((uint32_t)(cluster->cluster_hi) << 16) |
+                                (uint32_t)(cluster->cluster_lo);
+
+          if (*path == '/' && cluster->directory) {
+            kfree(path_name);
+            kfree(long_filename);
+            kfree(buffer);
+
+            cluster_no = fat_find(part, cluster_no, parent_cluster, path + 1);
+          } else {
+            kfree(path_name);
+            kfree(long_filename);
+            kfree(buffer);
+
+            if (parent_cluster)
+              *parent_cluster = *cluster;
+          }
+
+          return cluster_no;
+        }
+
+        kfree(path_name);
+        kfree(long_filename);
+
+      } else {
+        if (!strncmp(short_name, (char *)cluster->filename, 11)) {
+          uint32_t cluster_no = ((uint32_t)(cluster->cluster_hi) << 16) |
+                                (uint32_t)(cluster->cluster_lo);
+
+          if (*path == '/' && cluster->directory) {
+            kfree(buffer);
+            cluster_no = fat_find(part, cluster_no, parent_cluster, path + 1);
+          } else {
+            kfree(buffer);
+
+            if (parent_cluster)
+              *parent_cluster = *cluster;
+          }
+
+          return cluster_no;
+        }
       }
     }
 
@@ -224,9 +303,16 @@ int init_fat() {
   if (!fat_parts.length)
     return 1;
 
+  fat_list_dir(0, fat_find(0, 0, NULL, "/boot"));
+  puts("\r\nContents of limine.cfg:\r\n");
+
   fat_cluster_t cluster;
-  uint8_t *buffer = kmalloc(512);
-  fat_load_cluster(0, buffer, fat_find(0, 0, &cluster, "/boot/limine.cfg"));
+  uint32_t cluster_no = fat_find(0, 0, &cluster, "/boot/limine.cfg");
+  uint8_t *buffer =
+      kmalloc((cluster.size % 512 == 0) ? cluster.size
+                                        : (cluster.size / 512) * 512 + 512);
+
+  fat_load_cluster(0, buffer, cluster_no);
 
   for (size_t i = 0; i < cluster.size; i++) {
     if (buffer[i] == '\n')
