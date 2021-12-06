@@ -342,39 +342,10 @@ int init_sata() {
     for (size_t bus = mcfg->entries[i].sbus; bus < mcfg->entries[i].ebus; bus++)
       find_abar(mcfg->entries[i].base_address + PHYS_MEM_OFFSET, bus);
 
-  if (abars.length == 0)
+  if (!abars.length)
     return 1;
 
   init_abars();
-
-  /* uint8_t *chars = kmalloc(sizeof(uint8_t) * 512); */
-
-  /* uint8_t cleans[512] = {0}; */
-
-  /* for (size_t i = 0; i < 512; i++) { */
-  /* printf("%x ", chars[i]); */
-  /* } */
-
-  /* if (!sata_read(0, 0, 1, chars)) { */
-  /* printf("\r\n\n\nSuccess on reading disk!\r\n"); */
-
-  /* for (size_t i = 0; i < 512; i++) { */
-  /* printf("%x ", chars[i]); */
-  /* } */
-  /* } */
-
-  /* if (!sata_write(0, 0, 1, cleans)) { */
-  /* printf("Wrote successfully!\r\n"); */
-  /* if (!sata_read(0, 0, 1, chars)) { */
-  /* printf("\r\n\n\nSuccess on reading disk!\r\n"); */
-
-  /* for (size_t i = 0; i < 512; i++) { */
-  /* printf("%x ", chars[i]); */
-  /* } */
-
-  /* printf("\r\n"); */
-  /* } */
-  /* } */
 
   return 0;
 }

@@ -12,7 +12,8 @@ static uint16_t fb_height, fb_width;
 uint32_t curr_fg_col = 0xffffff;
 uint32_t curr_bg_col = 0x000000;
 
-static int curr_x = 0, curr_y = 0;
+static size_t curr_x = 0;
+static size_t curr_y = 0;
 
 static volatile lock_t fb_lock = {0};
 
@@ -35,7 +36,7 @@ void set_fg(uint32_t fg_col) {
   UNLOCK(fb_lock);
 }
 
-void putpixel(int x, int y, uint32_t color) {
+void putpixel(size_t x, size_t y, uint32_t color) {
   LOCK(fb_lock);
   framebuffer[y * fb_width + x] = color;
   UNLOCK(fb_lock);
@@ -54,13 +55,11 @@ void putnc(int x, int y, char c, uint32_t fgc, uint32_t bgc) {
 }
 
 void knewline() {
-  for (size_t i = 0; i < (size_t)(fb_width * fb_height); i++)
+  for (size_t i = 0; i < (fb_width * fb_height); i++)
     framebuffer[i] = (framebuffer + fb_width * FONT_HEIGHT)[i];
-  for (size_t i = 0; i < (size_t)(fb_width * fb_height); i++)
+  for (size_t i = 0; i < (fb_width * fb_height); i++)
     framebuffer[i] = (framebuffer + fb_width * FONT_HEIGHT)[i];
-  for (size_t i = 0; i < (size_t)(fb_height * (FONT_HEIGHT + 2)); i++)
-    (framebuffer + (fb_width * fb_height) - (fb_width * FONT_HEIGHT))[i] =
-        curr_bg_col;
+
   curr_y -= FONT_HEIGHT;
   curr_x = 0;
 }
@@ -68,7 +67,7 @@ void knewline() {
 void putc(char c, uint32_t fgc, uint32_t bgc) {
   switch (c) {
     case '\n':
-      if (curr_y + FONT_HEIGHT > fb_height)
+      if (curr_y + FONT_HEIGHT * 2 > fb_height)
         knewline();
       else
         curr_y += FONT_HEIGHT;
@@ -77,21 +76,13 @@ void putc(char c, uint32_t fgc, uint32_t bgc) {
       curr_x = 0;
       break;
     case '\b':
-      if (curr_x - FONT_WIDTH < 0 && curr_y - FONT_HEIGHT < 0)
-        ;
-      else if (curr_x - FONT_WIDTH < 0) {
-        curr_y -= FONT_HEIGHT;
-        curr_x = fb_width - (fb_width & FONT_WIDTH) - FONT_WIDTH;
-        putnc(curr_x, curr_y, ' ', fgc, bgc);
-      } else {
-        curr_x -= FONT_WIDTH;
-        putnc(curr_x, curr_y, ' ', fgc, bgc);
-      }
+      curr_x -= FONT_WIDTH;
+      putnc(curr_x, curr_y, ' ', fgc, bgc);
       break;
     default:
       if (curr_x + FONT_WIDTH > fb_width) {
         curr_x = 0;
-        if (curr_y + FONT_HEIGHT > fb_height)
+        if (curr_y + FONT_HEIGHT * 2 > fb_height)
           knewline();
         else
           curr_y += FONT_HEIGHT;

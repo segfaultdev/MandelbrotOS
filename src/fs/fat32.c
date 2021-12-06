@@ -19,18 +19,17 @@ uint64_t fat_cluster_to_sector(size_t part, uint32_t cluster) {
 
 uint32_t fat_get_next_cluster(size_t part, uint32_t cluster) {
   uint8_t buf[512];
-  uint64_t fat_sector = fat_parts.data[part].sector_start +
-                        fat_parts.data[part].boot.reserved_sectors +
-                        ((cluster * 4) / 512);
-  uint32_t fat_offset = (cluster * 4) % 512;
 
-  sata_read(fat_parts.data[part].drive, fat_sector, 1, buf);
-  uint8_t *cluster_chain = (uint8_t *)buf;
+  sata_read(fat_parts.data[part].drive,
+            fat_parts.data[part].sector_start +
+                fat_parts.data[part].boot.reserved_sectors +
+                ((cluster * 4) / 512),
+            1, buf);
 
-  return *((uint32_t *)&cluster_chain[fat_offset]) & 0x0FFFFFFF;
+  return *((uint32_t *)&buf[cluster * 4 % 512]) & 0xfffffff;
 }
 
-uint32_t fat_load_cluster(size_t part, uint8_t *buffer, uint32_t cluster) {
+uint32_t fat_read_cluster(size_t part, uint8_t *buffer, uint32_t cluster) {
   sata_read(fat_parts.data[part].drive,
             fat_cluster_to_sector(part, cluster) +
                 fat_parts.data[part].sector_start,
@@ -39,95 +38,174 @@ uint32_t fat_load_cluster(size_t part, uint8_t *buffer, uint32_t cluster) {
   return fat_get_next_cluster(part, cluster);
 }
 
-void fat_list_dir(size_t part, uint32_t directory) {
+void fat_read_cluster_chain(size_t part, uint8_t *buffer, uint32_t cluster) {
+  while (cluster >= 2 && cluster < 0xffffff7) {
+    cluster = fat_read_cluster(part, buffer, cluster);
+    buffer += fat_parts.data[part].boot.cluster_size * 512;
+  }
+}
+
+size_t fat_chain_cluster_length(size_t part, uint32_t cluster) {
+  uint8_t *buffer = kmalloc(512);
+  size_t count = 0;
+
+  while (cluster >= 2 && cluster < 0xffffff7) {
+    cluster = fat_read_cluster(part, buffer, cluster);
+    count++;
+  }
+
+  kfree(buffer);
+
+  return count;
+}
+
+void fat_change_fat_value(size_t part, uint32_t current_cluster,
+                          uint32_t next_cluster) {
+  uint8_t buffer[512];
+  uint64_t sector = fat_parts.data[part].sector_start +
+                    fat_parts.data[part].boot.reserved_sectors +
+                    ((current_cluster * 4) / 512);
+
+  sata_read(fat_parts.data[part].drive, sector, 1, buffer);
+
+  buffer[current_cluster * 4 % 512] = next_cluster;
+
+  sata_write(fat_parts.data[part].drive, sector, 1, buffer);
+}
+
+uint32_t fat_find_free_cluster(size_t part) {
+  for (size_t i = 0;
+       i < fat_parts.data[part].boot.sectors_per_fat; i++) {
+    uint32_t buffer[128];
+
+    sata_read(fat_parts.data[part].drive,
+              i + fat_parts.data[part].sector_start +
+                  fat_parts.data[part].boot.reserved_sectors,
+              1, (uint8_t *)buffer);
+
+    for (uint8_t j = 0; j < 128; j++) 
+      if (!buffer[j]) {
+        return ((i << 7) | j) & 0x0fffffff;
+      }
+  }
+
+  return 0xfffffff;
+}
+
+uint32_t fat_find_free_cluster_chain(size_t part, size_t size) {
+  size_t cluster_size = fat_parts.data[part].boot.cluster_size * 512;
+  size = (size + (cluster_size - 1)) / cluster_size;
+
+  uint32_t start = 0;
+  uint32_t previous = 0;
+  uint32_t current = 0;
+
+  for (size_t i = 0; i < size; i++) {
+    current = fat_find_free_cluster(part);
+
+    if (previous)
+      fat_change_fat_value(part, previous, current);
+
+    fat_change_fat_value(part, current, 0x0ffffff8);
+
+    if (!start)
+      start = current;
+
+    previous = current;
+  }
+
+  return start;
+}
+
+void fat_free_chain(size_t part, uint32_t cluster) {
+  while (1) {
+    uint32_t next = fat_get_next_cluster(part, cluster);
+
+    if (!next || next == 0x0ffffff8)
+      return;
+
+    fat_change_fat_value(part, cluster, 0);
+
+    cluster = next;
+  }
+}
+
+uint32_t fat_get_free_dir_entry_chain(size_t part, uint32_t directory, size_t length) {
   fat_partition_t partition = fat_parts.data[part];
 
   if (!directory)
     directory = partition.boot.root_cluster;
 
-  uint8_t *buffer = kmalloc(512 * partition.boot.cluster_size);
-  fat_load_cluster(part, buffer, directory);
+  size_t size = fat_chain_cluster_length(part, directory) * partition.boot.cluster_size * 512;
+  size_t start = 0;
+  size_t found_length = 0;
 
-  fat_cluster_t *cluster;
+  dir_entry_t *entries = kmalloc(size);
 
-  while (1) {
-    cluster = (void *)buffer;
+  fat_read_cluster_chain(part, (uint8_t *)entries, directory);
+  size /= sizeof(dir_entry_t);
 
-    if (!cluster->filename[0]) {
-      puts("End of listing!\r\n");
-      break;
-    } else if (cluster->filename[0] == 0xe5) {
-      puts("Empty cluster!\r\n");
-      continue;
-    }
-
-    if (cluster->flags == 0xf) {
-      long_filename_t *lfn = (void *)buffer;
-      size_t count = 0;
-
-      while (lfn->flags != 0x41) {
-        count++;
-        buffer += 32;
-        lfn = (void *)buffer;
+  for (size_t i = 0; i < size; i++) {
+    if (!entries[i].filename[0] || entries[i].filename[0] == 0xe5) {
+      if (++found_length == length) {
+        kfree(entries);
+        return (!start) ? i : start;
       }
-
-      cluster = (void *)buffer;
-      for (uint8_t i = 0; i < 8; i++)
-        putchar(cluster->filename[i]);
-      putchar('.');
-      for (uint8_t i = 8; i < 11; i++)
-        putchar(cluster->filename[i]);
-
-      buffer -= 32;
-      lfn = (void *)buffer;
-
-      puts(": ");
-
-      for (size_t i = 0; i < count; i++) {
-        for (size_t i = 0; i < 5; i++)
-          putchar(lfn->filename_lo[i]);
-        for (size_t i = 0; i < 6; i++)
-          putchar(lfn->filename_mid[i]);
-        for (size_t i = 0; i < 2; i++)
-          putchar(lfn->filename_hi[i]);
-
-        buffer -= 32;
-        lfn = (void *)buffer;
-      }
-
-      puts("\r\n");
-
-      buffer += (count + 2) * 32;
-
-      continue;
+      else if (!start)
+        start = i;
     }
-
-    if (cluster->directory) {
-      for (uint8_t i = 0; i < 11; i++)
-        putchar(cluster->filename[i]);
-
-      puts(" <DIR>");
-    } else {
-      for (uint8_t i = 0; i < 8; i++)
-        putchar(cluster->filename[i]);
-      putchar('.');
-      for (uint8_t i = 8; i < 11; i++)
-        putchar(cluster->filename[i]);
+    else {
+      found_length = 0;
+      start = 0;
     }
-
-    puts("\r\n");
-    buffer += 32;
   }
 
-  kfree(buffer);
+  kfree(entries);
+  return 0x0fffffff;
 }
 
-uint32_t fat_find(size_t part, uint32_t directory,
-                  fat_cluster_t *parent_cluster, char *path) {
+uint32_t fat_write_cluster(size_t part, uint8_t *buffer, uint32_t cluster) {
+  sata_write(fat_parts.data[part].drive,
+            fat_cluster_to_sector(part, cluster) +
+                fat_parts.data[part].sector_start,
+            fat_parts.data[part].boot.cluster_size, buffer);
+
+  return fat_get_next_cluster(part, cluster);
+}
+
+void fat_write_cluster_chain(size_t part, uint8_t *buffer, uint32_t cluster) {
+  while (cluster >= 2 && cluster < 0xffffff7) {
+    cluster = fat_write_cluster(part, buffer, cluster);
+    buffer += fat_parts.data[part].boot.cluster_size * 512;
+  }
+}
+
+void fat_set_dir_entry(size_t part, uint32_t directory, size_t index, dir_entry_t entry) {
   fat_partition_t partition = fat_parts.data[part];
 
-  if (directory >= 0x0FFFFFF7)
-    return 0x0FFFFFFF;
+  if (!directory)
+    directory = partition.boot.root_cluster;
+
+  size_t size = fat_chain_cluster_length(part, directory) * partition.boot.cluster_size * 512;
+
+  if (index > size / sizeof(dir_entry_t))
+    return;
+
+  dir_entry_t *entries = kmalloc(size);
+  fat_read_cluster_chain(part, (uint8_t *)entries, directory);
+
+  entries[index] = entry;
+  fat_write_cluster_chain(part, (uint8_t *)entries, directory);
+
+  kfree(entries);
+}
+
+uint32_t fat_find(size_t part, uint32_t directory, dir_entry_t *parent_cluster,
+                  char *path) {
+  fat_partition_t partition = fat_parts.data[part];
+
+  if (directory >= 0xffffff7)
+    return 0xfffffff;
   if (!directory)
     directory = partition.boot.root_cluster;
   if (!path)
@@ -158,123 +236,121 @@ uint32_t fat_find(size_t part, uint32_t directory,
     path++;
   }
 
-  size_t size = partition.boot.cluster_size * 512;
-  uint8_t *buffer = kmalloc(size);
-  fat_load_cluster(part, buffer, directory);
+  size_t size = fat_chain_cluster_length(part, directory) *
+                partition.boot.cluster_size * 512;
+  dir_entry_t *buffer = kmalloc(size);
+  fat_read_cluster_chain(part, (uint8_t *)buffer, directory);
 
-  while (directory >= 2 && directory < 0x0FFFFFF7) {
-    for (size_t i = 0; i < size / 32; i++, buffer += 32) {
-      fat_cluster_t *cluster = (void *)buffer;
+  size /= sizeof(dir_entry_t);
 
-      if (!cluster->filename[0] || cluster->filename[0] == 0xE5)
-        continue;
+  for (size_t i = 0; i < size; i++) {
+    dir_entry_t *cluster = &buffer[i];
 
-      if (cluster->flags == 0xf) {
-        long_filename_t *lfn = (void *)buffer;
-        size_t count = 0;
+    if (!cluster->filename[0] || cluster->filename[0] == 0xE5)
+      continue;
 
-        while (lfn->flags != 0x41) {
-          count++;
-          buffer += 32;
-          lfn = (void *)buffer;
-        }
+    if (cluster->flags == 0xf) {
+      long_filename_t *lfn = (void *)&buffer[i];
+      size_t count = 0;
 
-        buffer -= 32;
+      while (lfn->flags != 0x41) {
+        count++;
+        buffer += sizeof(long_filename_t);
         lfn = (void *)buffer;
+      }
 
-        uint8_t *long_filename = kmalloc(
-            count *
-            13); // Each long file name can hold 13 characters (If you convert
-                 // it from normal UTF16 to ASCII because nobody likes UTF16)
+      buffer -= sizeof(long_filename_t);
+      lfn = (void *)buffer;
 
-        for (size_t j = 0; j < count; j++) {
-          for (size_t i = 0; i < 5; i++)
-            long_filename[j * 13 + i] = lfn->filename_lo[i];
-          for (size_t i = 5; i < 11; i++)
-            long_filename[j * 13 + i] = lfn->filename_mid[i - 5];
-          for (size_t i = 11; i < 13; i++)
-            long_filename[j * 13 + i] = lfn->filename_hi[i - 11];
+      uint8_t *long_filename = kmalloc(
+          count *
+          13); // Each long file name can hold 13 characters (If you convert
+               // it from normal UTF16 to ASCII because nobody likes UTF16)
 
-          buffer -= 32;
-          lfn = (void *)buffer;
+      for (size_t j = 0; j < count; j++) {
+        for (size_t i = 0; i < 5; i++)
+          long_filename[j * 13 + i] = lfn->filename_lo[i];
+        for (size_t i = 5; i < 11; i++)
+          long_filename[j * 13 + i] = lfn->filename_mid[i - 5];
+        for (size_t i = 11; i < 13; i++)
+          long_filename[j * 13 + i] = lfn->filename_hi[i - 11];
+
+        buffer -= sizeof(long_filename_t);
+        lfn = (void *)buffer;
+      }
+
+      i += count + 2;
+      buffer += (count + 1) * 32;
+      dir_entry_t *cluster = (void *)buffer;
+
+      uint8_t *path_name = kmalloc(count * 13);
+
+      for (size_t i = 0; i < count * 13; i++)
+        path_name[i] = 255;
+
+      path -= pos;
+
+      pos = 0;
+      while (*path) {
+        if (*path == '/')
+          break;
+
+        path_name[pos++] = *path;
+
+        path++;
+      }
+
+      path_name[pos] = 0;
+
+      buffer -= sizeof(long_filename_t);
+
+      if (!strncmp((char *)path_name, (char *)long_filename, count * 13)) {
+        uint32_t cluster_no = ((uint32_t)(cluster->cluster_hi) << 16) |
+                              (uint32_t)(cluster->cluster_lo);
+
+        if (*path == '/' && cluster->directory) {
+          kfree(path_name);
+          kfree(long_filename);
+          kfree(buffer);
+
+          cluster_no = fat_find(part, cluster_no, parent_cluster, path + 1);
+        } else {
+          kfree(path_name);
+          kfree(long_filename);
+          kfree(buffer);
+
+          if (parent_cluster)
+            *parent_cluster = *cluster;
         }
 
-        i += count + 2;
-        buffer += (count + 1) * 32;
-        fat_cluster_t *cluster = (void *)buffer;
+        return cluster_no;
+      }
 
-        uint8_t *path_name = kmalloc(count * 13);
+      kfree(path_name);
+      kfree(long_filename);
 
-        for (size_t i = 0; i < count * 13; i++)
-          path_name[i] = 255;
+    } else {
+      if (!strncmp(short_name, (char *)cluster->filename, 11)) {
+        uint32_t cluster_no = ((uint32_t)(cluster->cluster_hi) << 16) |
+                              (uint32_t)(cluster->cluster_lo);
 
-        path -= pos;
+        if (*path == '/' && cluster->directory) {
+          kfree(buffer);
+          cluster_no = fat_find(part, cluster_no, parent_cluster, path + 1);
+        } else {
+          kfree(buffer);
 
-        pos = 0;
-        while (*path) {
-          if (*path == '/')
-            break;
-
-          path_name[pos++] = *path;
-
-          path++;
+          if (parent_cluster)
+            *parent_cluster = *cluster;
         }
 
-        path_name[pos] = 0;
-
-        buffer -= 32;
-
-        if (!strncmp((char *)path_name, (char *)long_filename, count * 13)) {
-          uint32_t cluster_no = ((uint32_t)(cluster->cluster_hi) << 16) |
-                                (uint32_t)(cluster->cluster_lo);
-
-          if (*path == '/' && cluster->directory) {
-            kfree(path_name);
-            kfree(long_filename);
-            kfree(buffer);
-
-            cluster_no = fat_find(part, cluster_no, parent_cluster, path + 1);
-          } else {
-            kfree(path_name);
-            kfree(long_filename);
-            kfree(buffer);
-
-            if (parent_cluster)
-              *parent_cluster = *cluster;
-          }
-
-          return cluster_no;
-        }
-
-        kfree(path_name);
-        kfree(long_filename);
-
-      } else {
-        if (!strncmp(short_name, (char *)cluster->filename, 11)) {
-          uint32_t cluster_no = ((uint32_t)(cluster->cluster_hi) << 16) |
-                                (uint32_t)(cluster->cluster_lo);
-
-          if (*path == '/' && cluster->directory) {
-            kfree(buffer);
-            cluster_no = fat_find(part, cluster_no, parent_cluster, path + 1);
-          } else {
-            kfree(buffer);
-
-            if (parent_cluster)
-              *parent_cluster = *cluster;
-          }
-
-          return cluster_no;
-        }
+        return cluster_no;
       }
     }
-
-    buffer -= size;
-    directory = fat_load_cluster(part, buffer, directory);
   }
 
   kfree(buffer);
-  return 0x0FFFFFFF;
+  return 0x0fffffff;
 }
 
 int init_fat() {
@@ -304,24 +380,6 @@ int init_fat() {
 
   if (!fat_parts.length)
     return 1;
-
-  fat_list_dir(0, fat_find(0, 0, NULL, "/boot"));
-  puts("\r\nContents of limine.cfg:\r\n");
-
-  fat_cluster_t cluster;
-  uint32_t cluster_no = fat_find(0, 0, &cluster, "/boot/limine.cfg");
-  uint8_t *buffer =
-      kmalloc((cluster.size % 512 == 0) ? cluster.size
-                                        : (cluster.size / 512) * 512 + 512);
-
-  fat_load_cluster(0, buffer, cluster_no);
-
-  for (size_t i = 0; i < cluster.size; i++) {
-    if (buffer[i] == '\n')
-      puts("\r\n");
-    else
-      putchar(buffer[i]);
-  }
 
   return 0;
 }

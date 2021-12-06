@@ -51,7 +51,7 @@ typedef struct bpb {
   uint16_t bootable_partition_signature;
 } __attribute__((packed)) bpb_t;
 
-typedef struct fat_cluster {
+typedef struct dir_entry {
   uint8_t filename[11];
 
   union {
@@ -93,7 +93,7 @@ typedef struct fat_cluster {
   uint16_t cluster_lo;
 
   uint32_t size;
-} __attribute__((packed)) fat_cluster_t;
+} __attribute__((packed)) dir_entry_t;
 
 typedef struct long_filename {
   uint8_t flags;
