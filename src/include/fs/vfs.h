@@ -44,6 +44,7 @@ typedef struct fs_mountpoint {
   uint8_t (*write)(size_t part, char *path, size_t offset, uint8_t *buffer,
                    size_t count);
   uint8_t (*delete)(size_t part, char *path);
+  uint8_t (*set_flags)(size_t part, char *path, uint32_t flags);
   size_t (*sizeof_file)(size_t part, char *path);
   int (*identify)(size_t part, char *path);
 

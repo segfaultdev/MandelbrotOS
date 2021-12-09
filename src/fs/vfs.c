@@ -167,18 +167,39 @@ uint8_t vfs_create_dir(char *path) {
     return 1;
   if (path[1] != ':')
     return 1;
-  if (!(path[0] >= 'A' && path[0] <= 'Z')) {
-    path[0] = path[0] - 'a' + 'A';
+  if (!(path[0] >= 'a' && path[0] <= 'z')) {
+    path[0] = path[0] - 'a' + 'a';
 
-    if (!(path[0] >= 'A' && path[0] <= 'Z'))
+    if (!(path[0] >= 'a' && path[0] <= 'z'))
       return 1;
-    if (path[0] - 'A' + 1 > vfs_mounts.length)
+    if (path[0] - 'a' + 1 > vfs_mounts.length)
       return 1;
   }
 
-  fs_mountpoint_t root_node = vfs_mounts.data[path[0] - 'A'];
+  fs_mountpoint_t root_node = vfs_mounts.data[path[0] - 'a'];
   if (root_node.mkdir)
     return root_node.mkdir(root_node.position_in_list, path + 2);
+
+  return 1;
+}
+
+uint8_t vfs_set_flags(char *path, uint32_t flags) {
+  if (strlen(path) < 2)
+    return 1;
+  if (path[1] != ':')
+    return 1;
+  if (!(path[0] >= 'a' && path[0] <= 'z')) {
+    path[0] = path[0] - 'a' + 'a';
+
+    if (!(path[0] >= 'a' && path[0] <= 'z'))
+      return 1;
+    if (path[0] - 'a' + 1 > vfs_mounts.length)
+      return 1;
+  }
+
+  fs_mountpoint_t root_node = vfs_mounts.data[path[0] - 'a'];
+  if (root_node.set_flags)
+    return root_node.set_flags(root_node.position_in_list, path + 2, flags);
 
   return 1;
 }

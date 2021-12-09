@@ -887,6 +887,9 @@ uint8_t fat_write_file(size_t part, char *path, size_t offset, uint8_t *buffer,
   if (fat_find(part, 0, &entry, &dir, &index, path) == 0xfffffff)
     return 1;
 
+  if (entry.read_only)
+    return 1;
+
   entry.accessed_day = time.day;
   entry.accessed_month = time.month;
   entry.accessed_year = time.year - 1980;
@@ -1245,6 +1248,32 @@ int fat_identify_file_or_dir(size_t part, char *path) {
   return VFS_FILE;
 }
 
+uint8_t fat_set_flags(size_t part, char *path, uint32_t flags) {
+  datetime_t time = get_datetime();
+
+  uint32_t directory;
+  size_t index;
+  dir_entry_t dir = {0};
+
+  if (fat_find(part, 0, &dir, &directory, &index, path) == 0xfffffff)
+    return 1;
+
+  dir.accessed_day = time.day;
+  dir.accessed_month = time.month;
+  dir.accessed_year = time.year - 1980;
+
+  if (flags & VFS_READ_ONLY)
+    dir.read_only = 1;
+  if (flags & VFS_SYSTEM)
+    dir.system = 1;
+  if (flags & VFS_HIDDEN)
+    dir.hidden = 1;
+
+  fat_set_dir_entry(part, directory, index, dir);
+
+  return 0;
+}
+
 fs_mountpoint_t fat_partition_to_fs_node(size_t part) {
   fs_mountpoint_t new_node = (fs_mountpoint_t){
       .list_directory =
@@ -1258,6 +1287,7 @@ fs_mountpoint_t fat_partition_to_fs_node(size_t part) {
       .identify = (int (*)(size_t part, char *path))fat_identify_file_or_dir,
       .sizeof_file = (size_t(*)(size_t part, char *path))fat_sizeof_file,
       .delete = (uint8_t(*)(size_t part, char *path))fat_delete,
+      .set_flags = (uint8_t(*)(size_t part, char *path, uint32_t flags))fat_set_flags,
       .info = (fs_file_t(*)(size_t part, char *path))fat_info_to_vfs_info,
       .fs_info = (void *)&fat_parts.data[part],
   };
