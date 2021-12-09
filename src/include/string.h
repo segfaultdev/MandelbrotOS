@@ -9,6 +9,9 @@ void strcat(char *dest, const char *src);
 size_t strlen(const char *s);
 int strncmp(const char *s1, const char *s2, size_t n);
 void memmove(void *dest, void *src, size_t n);
+char *strchr(char *s, int c);
+char *strrchr(char *s, int c);
+int memcmp(char *str_1, char *str_2, size_t size);
 
 void memset(void *buffer, unsigned char value, unsigned long count);
 void memset16(void *buffer, unsigned short value, unsigned long count);

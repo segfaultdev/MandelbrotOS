@@ -50,7 +50,19 @@ void k_thread() {
       ;
 
   klog(parse_mbr(), "Master boot record parsed\r\n");
-  klog(init_fat(), "FAT filesystem");
+  klog_init(init_fat(), "FAT filesystem");
+  klog_init(init_vfs(), "Virtual filesystem");
+
+  /* size_t file_size = vfs_sizeof_file("A:/boot/limine.cfg"); */
+  /* uint8_t *buffer = kmalloc(file_size); */
+  /* vfs_read("A:/boot/limine.cfg", 0, file_size, buffer); */
+
+  /* for (size_t i = 0; i < file_size; i++) { */
+    /* if (buffer[i] == '\n') */
+      /* puts("\r\n"); */
+    /* else */
+      /* putchar(buffer[i]); */
+  /* } */
 
   while (1)
     ;

@@ -40,6 +40,9 @@ It will run the QEMU emulator by default.
 # Using
 By default the OS does nothing as we don't have a userland but stuff can be added to the kernel for testing purposes. There will often be remaining test code that is left over.
 
+# Notes
+Mandelbrot uses DOS like file endings (CRLF) and uses DOS like paths with foreward slashes to address the filesystem. The root drive is always `A:` so the path for limine.cfg should always be `A:/boot/limine.cfg`
+
 # Commiting
 Mandelbrot is coded to some specific standards. They are
 

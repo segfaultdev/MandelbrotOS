@@ -1,8 +1,10 @@
 #ifndef __FAT32_H__
 #define __FAT32_H__
 
+#include <fs/vfs.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <vec.h>
 
 typedef struct bpb {
   uint8_t jump_bytes[3];
@@ -70,25 +72,26 @@ typedef struct dir_entry {
   uint8_t reserved2;
 
   uint8_t created_ticks;
-  uint16_t created_hour : 5;
-  uint16_t created_minute : 6;
   uint16_t created_second : 5;
-  uint16_t created_year : 7;
-  uint16_t created_month : 4;
+  uint16_t created_minute : 6;
+  uint16_t created_hour : 5;
   uint16_t created_day : 5;
+  uint16_t created_month : 4;
+  uint16_t created_year : 7;
 
-  uint16_t accessed_year : 7;
-  uint16_t accessed_month : 4;
   uint16_t accessed_day : 5;
+  uint16_t accessed_month : 4;
+  uint16_t accessed_year : 7;
 
   uint16_t cluster_hi;
 
-  uint16_t modified_hour : 5;
-  uint16_t modified_minute : 6;
   uint16_t modified_second : 5;
-  uint16_t modified_year : 7;
-  uint16_t modified_month : 4;
+  uint16_t modified_minute : 6;
+  uint16_t modified_hour : 5;
+
   uint16_t modified_day : 5;
+  uint16_t modified_month : 4;
+  uint16_t modified_year : 7;
 
   uint16_t cluster_lo;
 
@@ -116,6 +119,11 @@ typedef struct fat_partition {
   uint8_t partiton;
 } fat_partition_t;
 
+typedef vec_t(fat_partition_t) vec_fat_partition_t;
+
+extern vec_fat_partition_t fat_parts;
+
 int init_fat();
+fs_mountpoint_t fat_partition_to_fs_node(size_t part);
 
 #endif

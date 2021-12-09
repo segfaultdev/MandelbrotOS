@@ -49,3 +49,34 @@ void memmove(void *dest, void *src, size_t l) {
     for (size_t i = l; i > 0; i--)
       rdest[i - 1] = rsrc[i - 1];
 }
+
+char *strchr(char *s, int c) {
+    while (*s != (char) c) {
+        if (!*s++) 
+            return NULL;
+    }
+    return s;
+}
+
+char *strrchr(char *s, int c) {
+  char *last = NULL;
+  while (*s) {
+    if (*s == (char)(c)) 
+      last = s;
+    s++;
+  }
+  return (char *)(last);
+}
+
+int memcmp(char *str_1, char *str_2, size_t size) {
+  while (size) {
+    if (*str_1 != *str_2)
+      return (int)(*str_1) - (int)(*str_2);
+
+    str_1++;
+    str_2++;
+    size--;
+  }
+
+  return 0;
+}
