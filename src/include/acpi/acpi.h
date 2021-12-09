@@ -15,8 +15,8 @@ extern rsdp_t *rsdp;
 extern rsdt_t *rsdt;
 extern xsdt_t *xsdt;
 extern madt_t *madt;
+extern fadt_t *fadt;
 extern mcfg_t *mcfg;
-extern sdt_t *facp;
 
 extern vec_madt_lapic madt_lapics;
 extern vec_madt_ioapic madt_ioapics;

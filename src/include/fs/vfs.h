@@ -1,6 +1,7 @@
 #ifndef __VFS_H__
 #define __VFS_H__
 
+#include <drivers/rtc.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <vec.h>
@@ -20,6 +21,10 @@ typedef struct fs_file {
   uint32_t flags;
   uint8_t type;
   size_t file_size;
+
+  datetime_t created_time;
+  datetime_t modified_time;
+  datetime_t accessed_time;
 } fs_file_t;
 
 typedef vec_t(fs_file_t) vec_fs_file_t;

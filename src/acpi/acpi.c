@@ -14,6 +14,7 @@ rsdt_t *rsdt;
 xsdt_t *xsdt;
 mcfg_t *mcfg;
 madt_t *madt;
+fadt_t *fadt;
 
 vec_madt_lapic madt_lapics;
 vec_madt_ioapic madt_ioapics;
@@ -80,7 +81,6 @@ void gather_madt() {
       case 0:
         vec_push(&madt_lapics, (madt_lapic_t *)header);
         break;
-
       case 1:
         vec_push(&madt_ioapics, (madt_ioapic_t *)header);
         break;
@@ -109,6 +109,8 @@ int init_acpi(struct stivale2_struct_tag_rsdp *rsdp_info) {
 
   if (rsdp->revision >= 2)
     xsdt = (xsdt_t *)(rsdp->xsdt_address + PHYS_MEM_OFFSET);
+
+  fadt = get_table("FACP", 0);
 
   gather_madt();
 

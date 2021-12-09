@@ -7,6 +7,7 @@
 #include <drivers/mbr.h>
 #include <drivers/pcspkr.h>
 #include <drivers/pit.h>
+#include <drivers/rtc.h>
 #include <drivers/serial.h>
 #include <fb/fb.h>
 #include <fs/fat32.h>
@@ -40,6 +41,7 @@ void *stivale2_get_tag(struct stivale2_struct *stivale2_struct, uint64_t id) {
 
 void k_thread() {
   klog(3, "Scheduler started and running\r\n");
+  klog_init(init_rtc(), "Real time clock");
   klog_init(init_serial(), "Serial");
   klog_init(init_kbd(), "Keyboard");
   klog_init(pci_enumerate(), "PCI");
@@ -53,16 +55,27 @@ void k_thread() {
   klog_init(init_fat(), "FAT filesystem");
   klog_init(init_vfs(), "Virtual filesystem");
 
-  /* size_t file_size = vfs_sizeof_file("A:/boot/limine.cfg"); */
+  /* size_t file_size = vfs_sizeof_file("A:/boot/kernel"); */
   /* uint8_t *buffer = kmalloc(file_size); */
-  /* vfs_read("A:/boot/limine.cfg", 0, file_size, buffer); */
+  /* vfs_read("A:/boot/kernel", 0, file_size, buffer); */
 
   /* for (size_t i = 0; i < file_size; i++) { */
-    /* if (buffer[i] == '\n') */
-      /* puts("\r\n"); */
-    /* else */
-      /* putchar(buffer[i]); */
+  /* if (buffer[i] == '\n') */
+  /* puts("\r\n"); */
+  /* else */
+  /* putchar(buffer[i]); */
   /* } */
+
+  /* vfs_create_file("A:/averybigtestfile"); */
+
+  vec_fs_file_t files = vfs_list_dir("A:/boot");
+
+  for (size_t i = 0; i < (size_t)files.length; i++)
+    printf("%s %u-%u-%u %u:%u:%u\r\n", files.data[i].name,
+           files.data[i].created_time.day, files.data[i].created_time.month,
+           files.data[i].created_time.year, files.data[i].created_time.hours,
+           files.data[i].created_time.minutes,
+           files.data[i].created_time.seconds);
 
   while (1)
     ;

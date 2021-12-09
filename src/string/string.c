@@ -51,17 +51,17 @@ void memmove(void *dest, void *src, size_t l) {
 }
 
 char *strchr(char *s, int c) {
-    while (*s != (char) c) {
-        if (!*s++) 
-            return NULL;
-    }
-    return s;
+  while (*s != (char)c) {
+    if (!*s++)
+      return NULL;
+  }
+  return s;
 }
 
 char *strrchr(char *s, int c) {
   char *last = NULL;
   while (*s) {
-    if (*s == (char)(c)) 
+    if (*s == (char)(c))
       last = s;
     s++;
   }

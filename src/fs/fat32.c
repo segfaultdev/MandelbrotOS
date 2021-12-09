@@ -1,4 +1,5 @@
 #include <drivers/mbr.h>
+#include <drivers/rtc.h>
 #include <fb/fb.h>
 #include <fs/fat32.h>
 #include <fs/vfs.h>
@@ -413,6 +414,7 @@ int init_fat() {
 // This is only the functions I need to link the FAT driver to the VFS
 
 uint8_t fat_create_file(size_t part, char *path) {
+  datetime_t time = get_datetime();
   uint32_t parent_cluster;
 
   if (fat_find(part, 0, NULL, &parent_cluster, NULL, path) != 0xfffffff)
@@ -548,6 +550,25 @@ uint8_t fat_create_file(size_t part, char *path) {
     dir.cluster_lo = new_writing_cluster;
     dir.cluster_hi = new_writing_cluster >> 16;
 
+    dir.accessed_day = time.day;
+    dir.accessed_month = time.month;
+    dir.accessed_year = time.year - 1980;
+
+    dir.created_day = time.day;
+    dir.created_month = time.month;
+    dir.created_year = time.year - 1980;
+    dir.created_hour = time.hours;
+    dir.created_minute = time.minutes;
+    dir.created_second = time.seconds / 2;
+    dir.created_ticks = time.seconds % 2;
+
+    dir.modified_day = time.day;
+    dir.modified_month = time.month;
+    dir.modified_year = time.year - 1980;
+    dir.modified_hour = time.hours;
+    dir.modified_minute = time.minutes;
+    dir.modified_second = time.seconds / 2;
+
     memcpy(dir.filename, short_path, 11);
     fat_set_dir_entry(part, parent_cluster, index + len, dir);
   } else {
@@ -578,6 +599,25 @@ uint8_t fat_create_file(size_t part, char *path) {
     dir.cluster_lo = new_writing_cluster;
     dir.cluster_hi = new_writing_cluster >> 16;
 
+    dir.accessed_day = time.day;
+    dir.accessed_month = time.month;
+    dir.accessed_year = time.year - 1980;
+
+    dir.created_day = time.day;
+    dir.created_month = time.month;
+    dir.created_year = time.year - 1980;
+    dir.created_hour = time.hours;
+    dir.created_minute = time.minutes;
+    dir.created_second = time.seconds / 2;
+    dir.created_ticks = time.seconds % 2;
+
+    dir.modified_day = time.day;
+    dir.modified_month = time.month;
+    dir.modified_year = time.year - 1980;
+    dir.modified_hour = time.hours;
+    dir.modified_minute = time.minutes;
+    dir.modified_second = time.seconds / 2;
+
     memcpy(dir.filename, (uint8_t *)short_path, 11);
     fat_set_dir_entry(part, parent_cluster, index, dir);
   }
@@ -586,6 +626,8 @@ uint8_t fat_create_file(size_t part, char *path) {
 }
 
 uint8_t fat_create_directory(size_t part, char *path) {
+  datetime_t time = get_datetime();
+
   uint32_t parent_cluster;
 
   if (fat_find(part, 0, NULL, &parent_cluster, NULL, path) != 0xfffffff)
@@ -715,6 +757,26 @@ uint8_t fat_create_directory(size_t part, char *path) {
 
     uint32_t new_writing_cluster = fat_find_free_cluster(part);
     fat_change_fat_value(part, new_writing_cluster, 0xffffff8);
+
+    dir.accessed_day = time.day;
+    dir.accessed_month = time.month;
+    dir.accessed_year = time.year - 1980;
+
+    dir.created_day = time.day;
+    dir.created_month = time.month;
+    dir.created_year = time.year - 1980;
+    dir.created_hour = time.hours;
+    dir.created_minute = time.minutes;
+    dir.created_second = time.seconds / 2;
+    dir.created_ticks = (time.seconds % 2) * 100;
+
+    dir.modified_day = time.day;
+    dir.modified_month = time.month;
+    dir.modified_year = time.year - 1980;
+    dir.modified_hour = time.hours;
+    dir.modified_minute = time.minutes;
+    dir.modified_second = time.seconds / 2;
+
     dir.cluster_lo = new_writing_cluster;
     dir.cluster_hi = new_writing_cluster >> 16;
     dir.directory = 1;
@@ -743,6 +805,30 @@ uint8_t fat_create_directory(size_t part, char *path) {
 
     uint32_t new_writing_cluster = fat_find_free_cluster(part);
     fat_change_fat_value(part, new_writing_cluster, 0xffffff8);
+
+    dir.accessed_day = time.day;
+    dir.accessed_month = time.month;
+    dir.accessed_year = time.year - 1980;
+
+    dir.created_day = time.day;
+    dir.created_month = time.month;
+    dir.created_year = time.year - 1980;
+    dir.created_hour = time.hours;
+    dir.created_minute = time.minutes;
+    dir.created_second = time.seconds / 2;
+    dir.created_ticks = (time.seconds % 2) * 100;
+
+    dir.modified_day = time.day;
+    dir.modified_month = time.month;
+    dir.modified_year = time.year - 1980;
+    dir.modified_hour = time.hours;
+    dir.modified_minute = time.minutes;
+    dir.modified_second = time.seconds / 2;
+
+    dir.cluster_lo = new_writing_cluster;
+    dir.cluster_hi = new_writing_cluster >> 16;
+    dir.directory = 1;
+
     dir.cluster_lo = new_writing_cluster;
     dir.cluster_hi = new_writing_cluster >> 16;
     dir.directory = 1;
@@ -756,10 +842,22 @@ uint8_t fat_create_directory(size_t part, char *path) {
 
 uint8_t fat_read_file(size_t part, char *path, size_t offset, uint8_t *buffer,
                       size_t count) {
+  datetime_t time = get_datetime();
+
+  size_t index;
+  uint32_t dir;
+
   dir_entry_t entry = {0};
 
-  if (fat_find(part, 0, &entry, NULL, NULL, path) == 0xfffffff)
+  if (fat_find(part, 0, &entry, &dir, &index, path) == 0xfffffff)
     return 1;
+
+  entry.accessed_day = time.day;
+  entry.accessed_month = time.month;
+  entry.accessed_year = time.year - 1980;
+
+  fat_set_dir_entry(part, dir, index, entry);
+
   if (!count)
     return 1;
   if (entry.directory)
@@ -779,10 +877,20 @@ uint8_t fat_read_file(size_t part, char *path, size_t offset, uint8_t *buffer,
 
 uint8_t fat_write_file(size_t part, char *path, size_t offset, uint8_t *buffer,
                        size_t count) {
+  datetime_t time = get_datetime();
+
+  size_t index;
+  uint32_t dir;
+
   dir_entry_t entry = {0};
 
-  if (fat_find(part, 0, &entry, NULL, NULL, path) == 0xfffffff)
+  if (fat_find(part, 0, &entry, &dir, &index, path) == 0xfffffff)
     return 1;
+
+  entry.accessed_day = time.day;
+  entry.accessed_month = time.month;
+  entry.accessed_year = time.year - 1980;
+
   if (!count)
     return 1;
   if (entry.directory)
@@ -801,23 +909,48 @@ uint8_t fat_write_file(size_t part, char *path, size_t offset, uint8_t *buffer,
       part, file_buffer,
       ((uint32_t)(entry.cluster_hi << 16) | (uint32_t)(entry.cluster_lo)));
 
+  entry.modified_day = time.day;
+  entry.modified_month = time.month;
+  entry.modified_year = time.year - 1980;
+  entry.modified_hour = time.hours;
+  entry.modified_minute = time.minutes;
+  entry.modified_second = time.seconds / 2;
+
+  fat_set_dir_entry(part, dir, index, entry);
+
   return 0;
 }
 
 size_t fat_sizeof_file(size_t part, char *path) {
+  datetime_t time = get_datetime();
+
+  size_t index;
+  uint32_t dir;
+
   dir_entry_t entry = {0};
 
-  if (fat_find(part, 0, &entry, NULL, NULL, path) == 0xfffffff)
-    return 0;
+  if (fat_find(part, 0, &entry, &dir, &index, path) == 0xfffffff)
+    return -1;
+
+  entry.accessed_day = time.day;
+  entry.accessed_month = time.month;
+  entry.accessed_year = time.year - 1980;
+
+  fat_set_dir_entry(part, dir, index, entry);
 
   return entry.size;
 }
 
 fs_file_t fat_info_to_vfs_info(size_t part, char *path) {
-  dir_entry_t entry = {0};
   fs_file_t file = {0};
+  datetime_t time = get_datetime();
 
-  if (fat_find(part, 0, &entry, NULL, NULL, path) == 0xfffffff)
+  size_t index;
+  uint32_t dir;
+
+  dir_entry_t entry = {0};
+
+  if (fat_find(part, 0, &entry, &dir, &index, path) == 0xfffffff)
     return (fs_file_t){0};
 
   size_t size = fat_sizeof_file(part, path);
@@ -863,11 +996,44 @@ fs_file_t fat_info_to_vfs_info(size_t part, char *path) {
   if (entry.system)
     file.flags |= VFS_SYSTEM;
 
+  entry.accessed_day = time.day;
+  entry.accessed_month = time.month;
+  entry.accessed_year = time.year - 1980;
+
+  fat_set_dir_entry(part, dir, index, entry);
+
+  file.created_time = (datetime_t){
+      .day = entry.created_day,
+      .month = entry.created_month,
+      .year = entry.created_year + 1980,
+      .hours = entry.created_hour,
+      .minutes = entry.created_minute,
+      .seconds = entry.created_second * 2 + (entry.created_ticks / 100),
+  };
+
+  file.modified_time = (datetime_t){
+      .day = entry.modified_day,
+      .month = entry.modified_month,
+      .year = entry.modified_year + 1980,
+      .hours = entry.modified_hour,
+      .minutes = entry.modified_minute,
+      .seconds = entry.modified_second * 2,
+  };
+
+  file.accessed_time = (datetime_t){
+      .day = entry.accessed_day,
+      .month = entry.accessed_month,
+      .year = entry.accessed_year + 1980,
+  };
+
   return file;
 }
 
 vec_fs_file_t fat_list_directory(size_t part, char *path) {
-  uint32_t cluster = fat_find(part, 0, NULL, NULL, NULL, path);
+  datetime_t time = get_datetime();
+  uint32_t current_dir;
+
+  uint32_t cluster = fat_find(part, 0, NULL, &current_dir, NULL, path);
 
   vec_fs_file_t files = {0};
 
@@ -920,7 +1086,7 @@ vec_fs_file_t fat_list_directory(size_t part, char *path) {
           .file_size = entries[i + 1].size,
           .is_valid = 1,
       };
-      
+
       new_file.flags |= VFS_LONG_FILE_NAME;
       if (entries[i + 1].read_only)
         new_file.flags |= VFS_READ_ONLY;
@@ -928,6 +1094,31 @@ vec_fs_file_t fat_list_directory(size_t part, char *path) {
         new_file.flags |= VFS_HIDDEN;
       if (entries[i + 1].system)
         new_file.flags |= VFS_SYSTEM;
+
+      new_file.created_time = (datetime_t){
+          .day = entries[i].created_day,
+          .month = entries[i].created_month,
+          .year = entries[i].created_year + 1980,
+          .hours = entries[i].created_hour,
+          .minutes = entries[i].created_minute,
+          .seconds =
+              entries[i].created_second * 2 + (entries[i].created_ticks / 100),
+      };
+
+      new_file.modified_time = (datetime_t){
+          .day = entries[i].modified_day,
+          .month = entries[i].modified_month,
+          .year = entries[i].modified_year + 1980,
+          .hours = entries[i].modified_hour,
+          .minutes = entries[i].modified_minute,
+          .seconds = entries[i].modified_second * 2,
+      };
+
+      new_file.accessed_time = (datetime_t){
+          .day = entries[i].accessed_day,
+          .month = entries[i].accessed_month,
+          .year = entries[i].accessed_year + 1980,
+      };
 
       strcat(new_file.name, (char *)long_filename);
       vec_push(&files, new_file);
@@ -939,23 +1130,63 @@ vec_fs_file_t fat_list_directory(size_t part, char *path) {
       continue;
     }
 
-      fs_file_t new_file = (fs_file_t){
-          .type = VFS_FILE,
-          .file_size = entries[i + 1].size,
-          .is_valid = 1,
-      };
-      
-      if (entries[i + 1].read_only)
-        new_file.flags |= VFS_READ_ONLY;
-      if (entries[i + 1].hidden)
-        new_file.flags |= VFS_HIDDEN;
-      if (entries[i + 1].system)
-        new_file.flags |= VFS_SYSTEM;
+    fs_file_t new_file = (fs_file_t){
+        .type = VFS_FILE,
+        .file_size = entries[i + 1].size,
+        .is_valid = 1,
+    };
+
+    if (entries[i].read_only)
+      new_file.flags |= VFS_READ_ONLY;
+    if (entries[i].hidden)
+      new_file.flags |= VFS_HIDDEN;
+    if (entries[i].system)
+      new_file.flags |= VFS_SYSTEM;
+
+    new_file.created_time = (datetime_t){
+        .day = entries[i].created_day,
+        .month = entries[i].created_month,
+        .year = entries[i].created_year + 1980,
+        .hours = entries[i].created_hour,
+        .minutes = entries[i].created_minute,
+        .seconds =
+            entries[i].created_second * 2 + (entries[i].created_ticks / 100),
+    };
+
+    new_file.modified_time = (datetime_t){
+        .day = entries[i].modified_day,
+        .month = entries[i].modified_month,
+        .year = entries[i].modified_year + 1980,
+        .hours = entries[i].modified_hour,
+        .minutes = entries[i].modified_minute,
+        .seconds = entries[i].modified_second * 2,
+    };
+
+    new_file.accessed_time = (datetime_t){
+        .day = entries[i].accessed_day,
+        .month = entries[i].accessed_month,
+        .year = entries[i].accessed_year + 1980,
+    };
+
+    entries[i].accessed_day = time.day;
+    entries[i].accessed_month = time.month;
+    entries[i].accessed_year = time.year - 1980;
+
+    fat_set_dir_entry(part, current_dir,
+                      (i + 1) % (fat_parts.data[part].boot.cluster_size * 512 /
+                                 sizeof(dir_entry_t)),
+                      entries[i]);
+
+    if ((i + 1) * sizeof(dir_entry_t) %
+            fat_parts.data[part].boot.cluster_size ==
+        0)
+      current_dir = fat_get_next_cluster(part, current_dir);
 
     strcat(new_file.name, (char *)entries[i].filename);
     new_file.name[11] = 0;
     vec_push(&files, new_file);
   }
+
   return files;
 }
 
@@ -994,9 +1225,21 @@ uint8_t fat_delete(size_t part, char *path) {
 }
 
 int fat_identify_file_or_dir(size_t part, char *path) {
+  datetime_t time = get_datetime();
+
+  uint32_t directory;
+  size_t index;
   dir_entry_t dir = {0};
-  if (fat_find(part, 0, &dir, NULL, NULL, path) == 0xfffffff)
+
+  if (fat_find(part, 0, &dir, &directory, &index, path) == 0xfffffff)
     return VFS_NULL;
+
+  dir.accessed_day = time.day;
+  dir.accessed_month = time.month;
+  dir.accessed_year = time.year - 1980;
+
+  fat_set_dir_entry(part, directory, index, dir);
+
   if (dir.directory)
     return VFS_DIR;
   return VFS_FILE;
@@ -1015,7 +1258,7 @@ fs_mountpoint_t fat_partition_to_fs_node(size_t part) {
       .identify = (int (*)(size_t part, char *path))fat_identify_file_or_dir,
       .sizeof_file = (size_t(*)(size_t part, char *path))fat_sizeof_file,
       .delete = (uint8_t(*)(size_t part, char *path))fat_delete,
-      .info = (fs_file_t (*)(size_t part, char *path))fat_info_to_vfs_info,
+      .info = (fs_file_t(*)(size_t part, char *path))fat_info_to_vfs_info,
       .fs_info = (void *)&fat_parts.data[part],
   };
 
