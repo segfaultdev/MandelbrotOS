@@ -9,6 +9,6 @@
 #define SERIAL_COM4_BASE (0x2E8)
 
 int init_serial();
-void serial_print(char *buf);
+void serial_puts(char *buf);
 
 #endif

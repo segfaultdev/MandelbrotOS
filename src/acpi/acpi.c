@@ -23,7 +23,7 @@ vec_madt_iso madt_isos;
 
 // TODO: ACPI 2.0+ support
 
-bool do_acpi_checksum(sdt_t *th) {
+bool acpi_do_checksum(sdt_t *th) {
   uint8_t sum = 0;
 
   for (uint32_t i = 0; i < th->length; i++)
@@ -32,7 +32,7 @@ bool do_acpi_checksum(sdt_t *th) {
   return sum == 0;
 }
 
-void *get_table(char *signature, int index) {
+void *acpi_get_table(char *signature, int index) {
   size_t entries;
 
   if (rsdp->revision <= 2)
@@ -50,7 +50,7 @@ void *get_table(char *signature, int index) {
       h = (sdt_t *)(uint64_t)(xsdt->sptr[t] + PHYS_MEM_OFFSET);
 
     if (!strncmp(signature, h->signature, 4)) {
-      if (do_acpi_checksum(h) && i == index)
+      if (acpi_do_checksum(h) && i == index)
         return (void *)h;
 
       i++;
@@ -60,8 +60,8 @@ void *get_table(char *signature, int index) {
   return NULL;
 }
 
-void gather_madt() {
-  madt = get_table("APIC", 0);
+void acpi_gather_madt() {
+  madt = acpi_get_table("APIC", 0);
 
   if (!madt) {
     klog(1, "Failed to get MADT. Halting!");
@@ -110,9 +110,9 @@ int init_acpi(struct stivale2_struct_tag_rsdp *rsdp_info) {
   if (rsdp->revision >= 2)
     xsdt = (xsdt_t *)(rsdp->xsdt_address + PHYS_MEM_OFFSET);
 
-  fadt = get_table("FACP", 0);
+  fadt = acpi_get_table("FACP", 0);
 
-  gather_madt();
+  acpi_gather_madt();
 
   return 0;
 }

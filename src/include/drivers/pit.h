@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-void sleep(uint64_t ticks);
+void pit_sleep(uint64_t ticks);
 uint16_t pit_read_count();
 int init_pit();
 

@@ -414,7 +414,7 @@ int init_fat() {
 // This is only the functions I need to link the FAT driver to the VFS
 
 uint8_t fat_create_file(size_t part, char *path) {
-  datetime_t time = get_datetime();
+  datetime_t time = rtc_get_datetime();
   uint32_t parent_cluster;
 
   if (fat_find(part, 0, NULL, &parent_cluster, NULL, path) != 0xfffffff)
@@ -626,7 +626,7 @@ uint8_t fat_create_file(size_t part, char *path) {
 }
 
 uint8_t fat_create_directory(size_t part, char *path) {
-  datetime_t time = get_datetime();
+  datetime_t time = rtc_get_datetime();
 
   uint32_t parent_cluster;
 
@@ -842,7 +842,7 @@ uint8_t fat_create_directory(size_t part, char *path) {
 
 uint8_t fat_read_file(size_t part, char *path, size_t offset, uint8_t *buffer,
                       size_t count) {
-  datetime_t time = get_datetime();
+  datetime_t time = rtc_get_datetime();
 
   size_t index;
   uint32_t dir;
@@ -879,7 +879,7 @@ uint8_t fat_read_file(size_t part, char *path, size_t offset, uint8_t *buffer,
 
 uint8_t fat_write_file(size_t part, char *path, size_t offset, uint8_t *buffer,
                        size_t count) {
-  datetime_t time = get_datetime();
+  datetime_t time = rtc_get_datetime();
 
   size_t index;
   uint32_t dir;
@@ -949,7 +949,7 @@ uint8_t fat_write_file(size_t part, char *path, size_t offset, uint8_t *buffer,
 }
 
 size_t fat_sizeof_file(size_t part, char *path) {
-  datetime_t time = get_datetime();
+  datetime_t time = rtc_get_datetime();
 
   size_t index;
   uint32_t dir;
@@ -970,7 +970,7 @@ size_t fat_sizeof_file(size_t part, char *path) {
 
 fs_file_t fat_info_to_vfs_info(size_t part, char *path) {
   fs_file_t file = {0};
-  datetime_t time = get_datetime();
+  datetime_t time = rtc_get_datetime();
 
   size_t index;
   uint32_t dir;
@@ -1057,7 +1057,7 @@ fs_file_t fat_info_to_vfs_info(size_t part, char *path) {
 }
 
 vec_fs_file_t fat_list_directory(size_t part, char *path) {
-  datetime_t time = get_datetime();
+  datetime_t time = rtc_get_datetime();
   uint32_t current_dir;
 
   uint32_t cluster = fat_find(part, 0, NULL, &current_dir, NULL, path);
@@ -1252,7 +1252,7 @@ uint8_t fat_delete(size_t part, char *path) {
 }
 
 int fat_identify_file_or_dir(size_t part, char *path) {
-  datetime_t time = get_datetime();
+  datetime_t time = rtc_get_datetime();
 
   uint32_t directory;
   size_t index;
@@ -1273,7 +1273,7 @@ int fat_identify_file_or_dir(size_t part, char *path) {
 }
 
 uint8_t fat_set_flags(size_t part, char *path, uint32_t flags) {
-  datetime_t time = get_datetime();
+  datetime_t time = rtc_get_datetime();
 
   uint32_t directory;
   size_t index;

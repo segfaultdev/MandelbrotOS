@@ -43,9 +43,9 @@ extern vec_thread_t threads;
 extern vec_proc_t processes;
 
 void scheduler_init(uintptr_t addr, struct stivale2_struct_tag_smp *smp_info);
-thread_t *create_thread(char *name, uintptr_t addr, size_t time_slice, int user,
+thread_t *sched_create_thread(char *name, uintptr_t addr, size_t time_slice, int user,
                         int auto_enqueue, proc_t *mother_proc);
-proc_t *create_proc(char *name, int user);
+proc_t *sched_create_proc(char *name, int user);
 void await_sched_start();
 void await();
 

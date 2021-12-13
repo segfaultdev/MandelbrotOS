@@ -22,7 +22,7 @@ void *liballoc_alloc(int size) {
 }
 
 int liballoc_free_(void *ptr, int pages) {
-  free_pages(ptr - PHYS_MEM_OFFSET, pages + 1);
+  pmm_free_pages(ptr - PHYS_MEM_OFFSET, pages + 1);
   return 0;
 }
 

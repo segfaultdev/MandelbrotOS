@@ -103,7 +103,7 @@ static inline void ioapic_write(uintptr_t addr, size_t reg, uint32_t data) {
   *((volatile uint32_t *)(addr + IOAPIC_REG_IOWIN)) = data;
 }
 
-uint32_t get_gsi_count(uintptr_t addr) {
+uint32_t ioapic_get_gsi_count(uintptr_t addr) {
   return (ioapic_read(addr, IOAPIC_REG_VER) & 0xff0000) >> 16;
 }
 
@@ -112,7 +112,7 @@ madt_ioapic_t *get_ioapic_by_gsi(uint32_t gsi) {
     madt_ioapic_t *ioapic = madt_ioapics.data[i];
 
     if (ioapic->gsi <= gsi &&
-        ioapic->gsi + get_gsi_count(ioapic->address + PHYS_MEM_OFFSET) > gsi)
+        ioapic->gsi + ioapic_get_gsi_count(ioapic->address + PHYS_MEM_OFFSET) > gsi)
       return ioapic;
   }
   return NULL;

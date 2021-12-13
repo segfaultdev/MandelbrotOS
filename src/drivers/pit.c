@@ -19,7 +19,7 @@ void pit_handler(uint64_t rsp) {
   timer_ticks++;
 }
 
-void sleep(uint64_t ticks) {
+void pit_sleep(uint64_t ticks) {
   uint64_t rest_ticks = timer_ticks + ticks;
   while (timer_ticks < rest_ticks)
     ;

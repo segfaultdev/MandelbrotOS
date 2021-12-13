@@ -35,7 +35,7 @@ static volatile lock_t sched_lock = {0};
 
 extern void switch_and_run_stack(uintptr_t stack);
 
-void enqueue_thread(thread_t *thread) {
+void sched_enqueue_thread(thread_t *thread) {
   LOCK(sched_lock);
 
   if (thread->enqueued) {
@@ -55,7 +55,7 @@ void enqueue_thread(thread_t *thread) {
   UNLOCK(sched_lock);
 }
 
-thread_t *create_thread(char *name, uintptr_t addr, size_t time_slice, int user,
+thread_t *sched_create_thread(char *name, uintptr_t addr, size_t time_slice, int user,
                         int auto_enqueue, proc_t *mother_proc) {
   thread_t *new_thread = kmalloc(sizeof(thread_t));
 
@@ -92,12 +92,12 @@ thread_t *create_thread(char *name, uintptr_t addr, size_t time_slice, int user,
     new_thread->registers.rsp = stack + PHYS_MEM_OFFSET + PAGE_SIZE;
 
   if (auto_enqueue)
-    enqueue_thread(new_thread);
+    sched_enqueue_thread(new_thread);
 
   return new_thread;
 }
 
-void enqueue_proc(proc_t *proc) {
+void sched_enqueue_proc(proc_t *proc) {
   LOCK(sched_lock);
 
   if (proc->enqueued) {
@@ -111,26 +111,26 @@ void enqueue_proc(proc_t *proc) {
   UNLOCK(sched_lock);
 }
 
-proc_t *create_proc(char *name, int user) {
+proc_t *sched_create_proc(char *name, int user) {
   proc_t *new_proc = kmalloc(sizeof(proc_t));
 
   *new_proc = (proc_t){
       .name = name,
       .thread_count = 0,
       .pid = current_pid++,
-      .pagemap = (user) ? create_new_pagemap() : &kernel_pagemap,
+      .pagemap = (user) ? vmm_create_new_pagemap() : &kernel_pagemap,
       .virtual_stack_top = 0x70000000000,
       .enqueued = 0,
   };
 
   new_proc->threads.data = kmalloc(sizeof(thread_t *));
 
-  enqueue_proc(new_proc);
+  sched_enqueue_proc(new_proc);
 
   return new_proc;
 }
 
-int dequeue_thread(thread_t *thread) {
+int sched_dequeue_thread(thread_t *thread) {
   if (!thread->enqueued)
     return 0;
 
@@ -149,9 +149,9 @@ int dequeue_thread(thread_t *thread) {
   return 0;
 }
 
-void destroy_thread(thread_t *thread) {
+void sched_destroy_thread(thread_t *thread) {
   if (thread->enqueued)
-    dequeue_thread(thread);
+    sched_dequeue_thread(thread);
 
   kfree(thread);
 }
@@ -163,7 +163,7 @@ int dequeue_proc(proc_t *proc) {
   LOCK(sched_lock);
 
   for (size_t i = 0; i < proc->thread_count; i++)
-    dequeue_thread(proc->threads.data[i]);
+    sched_dequeue_thread(proc->threads.data[i]);
 
   vec_remove(&processes, proc);
 
@@ -172,15 +172,15 @@ int dequeue_proc(proc_t *proc) {
   return 1;
 }
 
-void destroy_proc(proc_t *proc) {
+void sched_destroy_proc(proc_t *proc) {
   if (proc->enqueued)
     dequeue_proc(proc);
 
   for (size_t i = 0; i < proc->thread_count; i++)
-    destroy_thread(proc->threads.data[i]);
+    sched_destroy_thread(proc->threads.data[i]);
 }
 
-size_t get_next_thread(size_t orig_i) {
+static size_t get_next_thread(size_t orig_i) {
   size_t index = orig_i + 1;
 
   while (1) {
@@ -285,9 +285,9 @@ void scheduler_init(uintptr_t addr, struct stivale2_struct_tag_smp *smp_info) {
   processes.data = kcalloc(sizeof(proc_t *));
   threads.data = kcalloc(sizeof(thread_t *));
 
-  proc_t *kernel_proc = create_proc("k_proc", 0);
+  proc_t *kernel_proc = sched_create_proc("k_proc", 0);
 
-  create_thread("k_init", addr, 5000, 0, 1, kernel_proc);
+  sched_create_thread("k_init", addr, 5000, 0, 1, kernel_proc);
 
   cpu_count = smp_info->cpu_count;
 

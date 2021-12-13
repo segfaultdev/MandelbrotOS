@@ -24,19 +24,19 @@ int init_fb(struct stivale2_struct_tag_framebuffer *framebuffer_info) {
   return 0;
 }
 
-void set_bg(uint32_t bg_col) {
+void fb_set_bg(uint32_t bg_col) {
   LOCK(fb_lock);
   curr_bg_col = bg_col;
   UNLOCK(fb_lock);
 }
 
-void set_fg(uint32_t fg_col) {
+void fb_set_fg(uint32_t fg_col) {
   LOCK(fb_lock);
   curr_fg_col = fg_col;
   UNLOCK(fb_lock);
 }
 
-void putpixel(size_t x, size_t y, uint32_t color) {
+void fb_putpixel(size_t x, size_t y, uint32_t color) {
   LOCK(fb_lock);
   framebuffer[y * fb_width + x] = color;
   UNLOCK(fb_lock);

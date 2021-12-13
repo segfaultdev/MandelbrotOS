@@ -27,9 +27,9 @@ typedef struct datetime {
   uint16_t year;
 } datetime_t;
 
-time_t get_time();
-date_t get_date();
-datetime_t get_datetime();
+time_t rtc_get_time();
+date_t rtc_get_date();
+datetime_t rtc_get_datetime();
 int init_rtc();
 
 #endif

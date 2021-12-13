@@ -40,7 +40,7 @@
 vec_t(uint64_t) abars = {};
 vec_hba_port_t sata_ports = {};
 
-void find_abar(uint64_t base_address, uint64_t bus) {
+void ahci_find_abar(uint64_t base_address, uint64_t bus) {
   uint64_t bus_address = base_address + (bus << 20);
   pci_device_t *pci_bus = (pci_device_t *)bus_address;
 
@@ -71,7 +71,7 @@ void find_abar(uint64_t base_address, uint64_t bus) {
 }
 
 // Thanks to OSDEV.org for these 5 snippets
-static inline uint8_t check_type(hba_port_t *port) {
+static inline uint8_t ahci_check_type(hba_port_t *port) {
   uint32_t ssts = port->ssts;
   uint8_t ipm = (ssts >> 8) & 0x0F;
   uint8_t det = ssts & 0x0F;
@@ -93,7 +93,7 @@ static inline uint8_t check_type(hba_port_t *port) {
   }
 }
 
-void start_cmd_engine(hba_port_t *port) {
+void ahci_start_cmd_engine(hba_port_t *port) {
   while (port->cmd & HBA_PXCMD_CR)
     ;
 
@@ -101,7 +101,7 @@ void start_cmd_engine(hba_port_t *port) {
   port->cmd |= HBA_PXCMD_ST;
 }
 
-void stop_cmd_engine(hba_port_t *port) {
+void ahci_stop_cmd_engine(hba_port_t *port) {
   port->cmd &= ~HBA_PXCMD_ST;
   port->cmd &= ~HBA_PXCMD_FRE;
 
@@ -114,8 +114,8 @@ void stop_cmd_engine(hba_port_t *port) {
   }
 }
 
-void port_init(hba_port_t *port) {
-  stop_cmd_engine(port);
+void ahci_port_init(hba_port_t *port) {
+  ahci_stop_cmd_engine(port);
 
   port->clb = (uint32_t)(uint64_t)pcalloc(1);
   port->clbu = 0;
@@ -131,10 +131,10 @@ void port_init(hba_port_t *port) {
     cmd_header[i].ctbau = 0;
   }
 
-  start_cmd_engine(port);
+  ahci_start_cmd_engine(port);
 }
 
-int8_t find_cmdslot(hba_port_t *port) {
+int8_t ahci_find_cmdslot(hba_port_t *port) {
   uint32_t slots = (port->sact | port->ci);
 
   for (int i = 0; i < 32; i++) {
@@ -158,7 +158,7 @@ int sata_read(size_t portno, uint64_t start, uint32_t count, uint8_t *buf) {
 
   port->is = (uint32_t)-1;
 
-  int8_t slot = find_cmdslot(port);
+  int8_t slot = ahci_find_cmdslot(port);
   if (slot == -1)
     return 1;
 
@@ -241,7 +241,7 @@ int sata_write(size_t portno, uint64_t start, uint32_t count, uint8_t *buf) {
 
   port->is = (uint32_t)-1;
 
-  int8_t slot = find_cmdslot(port);
+  int8_t slot = ahci_find_cmdslot(port);
   if (slot == -1)
     return 1;
 
@@ -315,17 +315,16 @@ int sata_write(size_t portno, uint64_t start, uint32_t count, uint8_t *buf) {
   return 0;
 }
 
-void init_abars() {
+void ahci_init_abars() {
   for (size_t j = 0; j < (size_t)abars.length; j++) {
     hba_mem_t *abar = (hba_mem_t *)abars.data[j];
 
     for (uint32_t i = 0, pi = abar->pi; i < 32; i++, pi >>= 1) {
-      if (pi & 1) {
-        if (check_type(&abar->ports[i]) == AHCI_DEV_SATA) {
-          port_init(&abar->ports[i]);
+      if (pi & 1)
+        if (ahci_check_type(&abar->ports[i]) == AHCI_DEV_SATA) {
+          ahci_port_init(&abar->ports[i]);
           vec_push(&sata_ports, &abar->ports[i]);
         }
-      }
     }
   }
 }
@@ -340,12 +339,12 @@ int init_sata() {
   for (size_t i = 0;
        i < (mcfg->h.length - sizeof(mcfg_t)) / sizeof(mcfg_entry_t); i++)
     for (size_t bus = mcfg->entries[i].sbus; bus < mcfg->entries[i].ebus; bus++)
-      find_abar(mcfg->entries[i].base_address + PHYS_MEM_OFFSET, bus);
+      ahci_find_abar(mcfg->entries[i].base_address + PHYS_MEM_OFFSET, bus);
 
   if (!abars.length)
     return 1;
 
-  init_abars();
+  ahci_init_abars();
 
   return 0;
 }

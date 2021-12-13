@@ -51,7 +51,7 @@ void pci_enumerate_bus(uint64_t base_address, uint64_t bus) {
 }
 
 int pci_enumerate() {
-  mcfg = (mcfg_t *)get_table("MCFG", 0);
+  mcfg = (mcfg_t *)acpi_get_table("MCFG", 0);
 
   if (mcfg == NULL)
     return 1;

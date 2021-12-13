@@ -24,6 +24,6 @@ extern vec_madt_nmi madt_nmis;
 extern vec_madt_iso madt_isos;
 
 int init_acpi(struct stivale2_struct_tag_rsdp *rsdp_info);
-void *get_table(char *signature, int index);
+void *acpi_get_table(char *signature, int index);
 
 #endif

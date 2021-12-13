@@ -33,7 +33,7 @@ void serial_conf_modem(uint16_t base) {
   outb(SERIAL_MODEM_COMMAND_PORT(base), 0x0B);
 }
 
-int init_serial_port(uint16_t base, uint16_t divisor) {
+int serial_init_port(uint16_t base, uint16_t divisor) {
 
   outb(SERIAL_DATA_PORT(base) + 1, 0x00);
   serial_conf_baud_rate(base, divisor);
@@ -79,7 +79,7 @@ void serial_print_port(uint16_t base, char *buf) {
 int init_serial() {
   LOCK(serial_lock);
 
-  init_serial_port(SERIAL_COM1_BASE, 3);
+  serial_init_port(SERIAL_COM1_BASE, 3);
   /* init_serial_port(SERIAL_COM2_BASE, 3); */
   /* init_serial_port(SERIAL_COM3_BASE, 3); */
   /* init_serial_port(SERIAL_COM4_BASE, 3); */
@@ -89,7 +89,7 @@ int init_serial() {
   return 0;
 }
 
-void serial_print(char *buf) {
+void serial_puts(char *buf) {
   serial_print_port(SERIAL_COM1_BASE, buf);
   /* serial_print_port(SERIAL_COM2_BASE, buf); */
   /* serial_print_port(SERIAL_COM3_BASE, buf); */

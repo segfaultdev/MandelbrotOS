@@ -77,8 +77,8 @@ void k_thread() {
   klog_init(init_fat(), "FAT filesystem");
   klog_init(init_vfs(), "Virtual filesystem");
 
-  proc_t *user_proc = create_proc("u_proc", 1);
-  create_thread("u_test", (uintptr_t)user_thread, 5000, 1, 1, user_proc);
+  proc_t *user_proc = sched_create_proc("u_proc", 1);
+  sched_create_thread("u_test", (uintptr_t)user_thread, 5000, 1, 1, user_proc);
 
   while (1)
     ;

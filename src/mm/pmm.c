@@ -19,26 +19,26 @@ static volatile lock_t pmm_lock = {0};
 static uint8_t *pmm_bitmap = 0;
 static uintptr_t highest_page = 0;
 
-void free_page(void *adr) {
+void pmm_free_page(void *adr) {
   LOCK(pmm_lock);
   BIT_CLEAR((size_t)adr / PAGE_SIZE);
   UNLOCK(pmm_lock);
 }
 
-void alloc_page(void *adr) {
+void pmm_alloc_page(void *adr) {
   MAKE_LOCK(pmm_lock);
   BIT_SET((size_t)adr / PAGE_SIZE);
   UNLOCK(pmm_lock);
 }
 
-void free_pages(void *adr, size_t page_count) {
+void pmm_free_pages(void *adr, size_t page_count) {
   for (size_t i = 0; i < page_count; i++)
-    free_page((void *)(adr + (i * PAGE_SIZE)));
+    pmm_free_page((void *)(adr + (i * PAGE_SIZE)));
 }
 
-void alloc_pages(void *adr, size_t page_count) {
+void pmm_alloc_pages(void *adr, size_t page_count) {
   for (size_t i = 0; i < page_count; i++)
-    alloc_page((void *)(adr + (i * PAGE_SIZE)));
+    pmm_alloc_page((void *)(adr + (i * PAGE_SIZE)));
 }
 
 void *pmalloc(size_t pages) {
@@ -50,7 +50,7 @@ void *pmalloc(size_t pages) {
         break;
       else if (j == pages - 1) {
         UNLOCK(pmm_lock);
-        alloc_pages((void *)(i * PAGE_SIZE), pages);
+        pmm_alloc_pages((void *)(i * PAGE_SIZE), pages);
         return (void *)(i * PAGE_SIZE);
       }
     }
@@ -107,7 +107,7 @@ int init_pmm(struct stivale2_struct_tag_memmap *memory_info) {
 
   for (size_t i = 0; i < memory_info->entries; i++)
     if (memory_info->memmap[i].type == STIVALE2_MMAP_USABLE)
-      free_pages((void *)memory_info->memmap[i].base,
+      pmm_free_pages((void *)memory_info->memmap[i].base,
                  memory_info->memmap[i].length / PAGE_SIZE);
 
   return 0;
