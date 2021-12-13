@@ -15,7 +15,6 @@
 #include <string.h>
 #include <sys/gdt.h>
 #include <sys/irq.h>
-#include <sys/types.h>
 #include <tasking/scheduler.h>
 #include <vec.h>
 
@@ -48,6 +47,10 @@ void enqueue_thread(thread_t *thread) {
   vec_push(&thread->mother_proc->threads, thread);
   thread->mother_proc->thread_count++;
   thread->enqueued = 1;
+
+  for (size_t i = 0; i < cpu_count; i++)
+    if (LOCKED_READ(cpu_locals[i].is_idle))
+      lapic_send_ipi(cpu_locals[i].lapic_id, SCHEDULE_REG);
 
   UNLOCK(sched_lock);
 }
@@ -104,10 +107,6 @@ void enqueue_proc(proc_t *proc) {
 
   vec_push(&processes, proc);
   proc->enqueued = 1;
-
-  for (size_t i = 0; i < cpu_count; i++)
-    if (LOCKED_READ(cpu_locals[i].is_idle))
-      lapic_send_ipi(cpu_locals[i].lapic_id, SCHEDULE_REG);
 
   UNLOCK(sched_lock);
 }
@@ -190,7 +189,8 @@ size_t get_next_thread(size_t orig_i) {
 
     thread_t *thread = LOCKED_READ(threads.data[index]);
 
-    if (thread && LOCK_ACQUIRE(thread->lock))
+    if (thread &&
+        (LOCK_ACQUIRE(thread->lock) || thread == get_locals()->current_thread))
       return index;
 
     if (index == orig_i)
@@ -222,6 +222,13 @@ void schedule(uint64_t rsp) {
   size_t new_index = get_next_thread(locals->last_run_thread_index);
 
   if (current_thread) {
+    if (new_index == locals->last_run_thread_index) {
+      UNLOCK(sched_lock);
+      lapic_eoi();
+      lapic_timer_oneshot(SCHEDULE_REG,
+                          current_thread ? current_thread->time_slice : 20000);
+      switch_and_run_stack((uintptr_t)rsp);
+    }
     current_thread->registers = *((registers_t *)rsp);
     UNLOCK(current_thread->lock);
   }
@@ -230,8 +237,11 @@ void schedule(uint64_t rsp) {
     locals->current_thread = NULL;
     locals->last_run_thread_index = 0;
     locals->is_idle = 1;
+
     lapic_eoi();
+
     UNLOCK(sched_lock);
+
     asm volatile("hlt");
     while (1)
       ;
@@ -271,20 +281,13 @@ void await_sched_start() {
   await();
 }
 
-void user_thread() {
-  while (1)
-    ;
-}
-
 void scheduler_init(uintptr_t addr, struct stivale2_struct_tag_smp *smp_info) {
   processes.data = kcalloc(sizeof(proc_t *));
   threads.data = kcalloc(sizeof(thread_t *));
 
   proc_t *kernel_proc = create_proc("k_proc", 0);
-  proc_t *user_proc = create_proc("u_proc", 1);
 
   create_thread("k_init", addr, 5000, 0, 1, kernel_proc);
-  create_thread("u_test", (uintptr_t)user_thread, 5000, 1, 1, user_proc);
 
   cpu_count = smp_info->cpu_count;
 

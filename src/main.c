@@ -25,6 +25,7 @@
 #include <sys/idt.h>
 #include <sys/irq.h>
 #include <sys/isr.h>
+#include <sys/syscall.h>
 #include <tasking/scheduler.h>
 #include <tasking/smp.h>
 
@@ -37,6 +38,27 @@ void *stivale2_get_tag(struct stivale2_struct *stivale2_struct, uint64_t id) {
       return current_tag;
     current_tag = (void *)current_tag->next;
   }
+}
+
+void user_thread() {
+  size_t index;
+  syscall(SYSCALL_OPEN, (uint64_t) "A:/boot/limine.cfg", (uint64_t)&index, 0);
+
+  volatile uint8_t buf[100] = {0};
+  syscall(SYSCALL_READ, index, (volatile uint64_t)buf, 88);
+
+  for (volatile size_t i = 0; i < 88;
+       i++) { // Naughty compiler likes to screw with my beautiful for loop. For
+              // this reason, we must make it not be messed with and make it
+              // volatile
+    if (buf[i] == '\n')
+      syscall(SYSCALL_PRINT, (uint64_t) "\r\n", 0, 0);
+    else
+      syscall(SYSCALL_PUTCHAR, (uint64_t)buf[i], 0, 0);
+  }
+
+  while (1)
+    ;
 }
 
 void k_thread() {
@@ -54,6 +76,9 @@ void k_thread() {
   klog(parse_mbr(), "Master boot record parsed\r\n");
   klog_init(init_fat(), "FAT filesystem");
   klog_init(init_vfs(), "Virtual filesystem");
+
+  proc_t *user_proc = create_proc("u_proc", 1);
+  create_thread("u_test", (uintptr_t)user_thread, 5000, 1, 1, user_proc);
 
   while (1)
     ;
@@ -85,6 +110,7 @@ void kernel_main(struct stivale2_struct *bootloader_info) {
 
   klog_init(init_fb(framebuffer_info), "Framebuffer");
   klog_init(init_acpi(rsdp_info), "ACPI");
+  klog_init(init_syscalls(), "System calls");
   klog_init(init_smp(smp_info), "SMP");
 
   scheduler_init((uintptr_t)k_thread, smp_info);

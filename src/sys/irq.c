@@ -43,23 +43,23 @@ void pic_remap(void) {
 int init_irq() {
   pic_remap();
 
-  idt_set_gate(&idt[32 + 0], 0, irq0);
-  idt_set_gate(&idt[32 + 1], 0, irq1);
-  idt_set_gate(&idt[32 + 2], 0, irq2);
-  idt_set_gate(&idt[32 + 3], 0, irq3);
-  idt_set_gate(&idt[32 + 4], 0, irq4);
-  idt_set_gate(&idt[32 + 5], 0, irq5);
-  idt_set_gate(&idt[32 + 6], 0, irq6);
-  idt_set_gate(&idt[32 + 7], 0, irq7);
-  idt_set_gate(&idt[32 + 8], 0, irq8);
-  idt_set_gate(&idt[32 + 9], 0, irq9);
-  idt_set_gate(&idt[32 + 10], 0, irq10);
-  idt_set_gate(&idt[32 + 11], 0, irq11);
-  idt_set_gate(&idt[32 + 12], 0, irq12);
-  idt_set_gate(&idt[32 + 13], 0, irq13);
-  idt_set_gate(&idt[32 + 14], 0, irq14);
-  idt_set_gate(&idt[32 + 15], 0, irq15);
-  idt_set_gate(&idt[32 + 16], 0, schedule_irq);
+  idt_set_gate(&idt[32 + 0], 1, 0, irq0);
+  idt_set_gate(&idt[32 + 1], 1, 0, irq1);
+  idt_set_gate(&idt[32 + 2], 1, 0, irq2);
+  idt_set_gate(&idt[32 + 3], 1, 0, irq3);
+  idt_set_gate(&idt[32 + 4], 1, 0, irq4);
+  idt_set_gate(&idt[32 + 5], 1, 0, irq5);
+  idt_set_gate(&idt[32 + 6], 1, 0, irq6);
+  idt_set_gate(&idt[32 + 7], 1, 0, irq7);
+  idt_set_gate(&idt[32 + 8], 1, 0, irq8);
+  idt_set_gate(&idt[32 + 9], 1, 0, irq9);
+  idt_set_gate(&idt[32 + 10], 1, 0, irq10);
+  idt_set_gate(&idt[32 + 11], 1, 0, irq11);
+  idt_set_gate(&idt[32 + 12], 1, 0, irq12);
+  idt_set_gate(&idt[32 + 13], 1, 0, irq13);
+  idt_set_gate(&idt[32 + 14], 1, 0, irq14);
+  idt_set_gate(&idt[32 + 15], 1, 0, irq15);
+  idt_set_gate(&idt[32 + 16], 1, 0, schedule_irq);
 
   return 0;
 }

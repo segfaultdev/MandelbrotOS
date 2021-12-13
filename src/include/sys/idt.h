@@ -3,16 +3,6 @@
 
 #include <stdint.h>
 
-enum idt_attr {
-  idt_a_present = 1 << 7,
-  idt_a_ring_0 = 0 << 5,
-  idt_a_ring_1 = 1 << 5,
-  idt_a_ring_2 = 2 << 5,
-  idt_a_ring_3 = 3 << 5,
-  idt_a_type_interrupt = 0xE,
-  idt_a_type_trap = 0xF
-};
-
 typedef struct idt_entry {
   uint16_t base_low;
   uint16_t sel;
@@ -30,7 +20,8 @@ typedef struct idt_ptr {
 
 extern idt_entry_t idt[256];
 
-void idt_set_gate(idt_entry_t *entry, int user_space, void (*func)());
+void idt_set_gate(idt_entry_t *entry, int user_space, int exception,
+                  void (*func)());
 void load_idt();
 int init_idt();
 

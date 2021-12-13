@@ -872,6 +872,8 @@ uint8_t fat_read_file(size_t part, char *path, size_t offset, uint8_t *buffer,
 
   memcpy(buffer, file_buffer + offset, count);
 
+  kfree(file_buffer);
+
   return 0;
 }
 
@@ -898,10 +900,30 @@ uint8_t fat_write_file(size_t part, char *path, size_t offset, uint8_t *buffer,
     return 1;
   if (entry.directory)
     return 1;
-  if (entry.size < offset + count)
-    return 1;
 
-  uint8_t *file_buffer = kmalloc(entry.size);
+  while (count + offset >
+         fat_chain_cluster_length(part, ((uint32_t)(entry.cluster_hi << 16) |
+                                         (uint32_t)(entry.cluster_lo))) *
+             fat_parts.data[part].boot.cluster_size) {
+    uint32_t last_entry_in_chain =
+        ((uint32_t)(entry.cluster_hi << 16) | (uint32_t)(entry.cluster_lo));
+
+    for (size_t i = 0; i < fat_chain_cluster_length(
+                               part, ((uint32_t)(entry.cluster_hi << 16) |
+                                      (uint32_t)(entry.cluster_lo))) -
+                               1;
+         i++)
+      last_entry_in_chain = fat_get_next_cluster(part, last_entry_in_chain);
+
+    uint32_t free_entry = fat_find_free_cluster(part);
+    fat_change_fat_value(part, last_entry_in_chain, free_entry);
+    fat_change_fat_value(part, free_entry, 0xffffff8);
+  }
+
+  uint8_t *file_buffer = kmalloc(
+      fat_chain_cluster_length(part, ((uint32_t)(entry.cluster_hi << 16) |
+                                      (uint32_t)(entry.cluster_lo))) *
+      fat_parts.data[part].boot.cluster_size);
   fat_read_cluster_chain(
       part, file_buffer,
       ((uint32_t)(entry.cluster_hi << 16) | (uint32_t)(entry.cluster_lo)));
@@ -920,6 +942,8 @@ uint8_t fat_write_file(size_t part, char *path, size_t offset, uint8_t *buffer,
   entry.modified_second = time.seconds / 2;
 
   fat_set_dir_entry(part, dir, index, entry);
+
+  kfree(file_buffer);
 
   return 0;
 }
@@ -1287,7 +1311,8 @@ fs_mountpoint_t fat_partition_to_fs_node(size_t part) {
       .identify = (int (*)(size_t part, char *path))fat_identify_file_or_dir,
       .sizeof_file = (size_t(*)(size_t part, char *path))fat_sizeof_file,
       .delete = (uint8_t(*)(size_t part, char *path))fat_delete,
-      .set_flags = (uint8_t(*)(size_t part, char *path, uint32_t flags))fat_set_flags,
+      .set_flags =
+          (uint8_t(*)(size_t part, char *path, uint32_t flags))fat_set_flags,
       .info = (fs_file_t(*)(size_t part, char *path))fat_info_to_vfs_info,
       .fs_info = (void *)&fat_parts.data[part],
   };

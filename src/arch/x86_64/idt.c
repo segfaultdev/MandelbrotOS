@@ -1,16 +1,24 @@
 #include <stdint.h>
+#include <sys/gdt.h>
 #include <sys/idt.h>
 
 static idt_ptr_t idtp;
 idt_entry_t idt[256];
 
-void idt_set_gate(idt_entry_t *entry, int user_space, void (*func)()) {
+void idt_set_gate(idt_entry_t *entry, int user_space, int exception,
+                  void (*func)()) {
   entry->base_low = (uint16_t)((uint64_t)(func));
   entry->base_mid = (uint16_t)((uint64_t)(func) >> 16);
   entry->base_high = (uint32_t)((uint64_t)(func) >> 32);
-  entry->sel = 8;
-  entry->flags = idt_a_present | (user_space ? idt_a_ring_3 : idt_a_ring_0) |
-                 idt_a_type_interrupt;
+  entry->sel = GDT_SEG_KCODE;
+
+  if (exception)
+    entry->flags =
+        (user_space) ? 0xef : 0x8f; // Present, trap and DPL 3 or 0 respectively
+  else
+    entry->flags = (user_space)
+                       ? 0xee
+                       : 0x8e; // Present, interrupt and DPL 3 or 0 respectively
 }
 
 void load_idt() { asm volatile("lidt %0" : : "m"(idtp)); }

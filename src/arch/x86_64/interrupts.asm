@@ -139,6 +139,28 @@ IRQ 13
 IRQ 14
 IRQ 15
 
+global syscall_isr
+
+extern c_syscall_handler
+
+syscall_stub:
+  pushaq
+
+  mov rdi, rsp
+  call c_syscall_handler
+  
+  popaq
+  
+  add rsp, 16
+
+  iretq
+
+syscall_isr:
+  cli
+  push 0
+  push 0x45
+  jmp syscall_stub
+  
 global schedule_irq
 
 extern schedule

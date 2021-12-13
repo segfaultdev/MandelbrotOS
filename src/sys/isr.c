@@ -76,43 +76,45 @@ char *exception_messages[] = {
 };
 
 int init_isr() {
-  idt_set_gate(&idt[0], 0, isr0);
-  idt_set_gate(&idt[1], 0, isr1);
-  idt_set_gate(&idt[2], 0, isr2);
-  idt_set_gate(&idt[3], 0, isr3);
-  idt_set_gate(&idt[4], 0, isr4);
-  idt_set_gate(&idt[5], 0, isr5);
-  idt_set_gate(&idt[6], 0, isr6);
-  idt_set_gate(&idt[7], 0, isr7);
-  idt_set_gate(&idt[8], 0, isr8);
-  idt_set_gate(&idt[9], 0, isr9);
-  idt_set_gate(&idt[10], 0, isr10);
-  idt_set_gate(&idt[11], 0, isr11);
-  idt_set_gate(&idt[12], 0, isr12);
-  idt_set_gate(&idt[13], 0, isr13);
-  idt_set_gate(&idt[14], 0, isr14);
-  idt_set_gate(&idt[15], 0, isr15);
-  idt_set_gate(&idt[16], 0, isr16);
-  idt_set_gate(&idt[17], 0, isr17);
-  idt_set_gate(&idt[18], 0, isr18);
-  idt_set_gate(&idt[19], 0, isr19);
-  idt_set_gate(&idt[20], 0, isr20);
-  idt_set_gate(&idt[21], 0, isr21);
-  idt_set_gate(&idt[22], 0, isr22);
-  idt_set_gate(&idt[23], 0, isr23);
-  idt_set_gate(&idt[24], 0, isr24);
-  idt_set_gate(&idt[25], 0, isr25);
-  idt_set_gate(&idt[26], 0, isr26);
-  idt_set_gate(&idt[27], 0, isr27);
-  idt_set_gate(&idt[28], 0, isr28);
-  idt_set_gate(&idt[29], 0, isr29);
-  idt_set_gate(&idt[30], 0, isr30);
-  idt_set_gate(&idt[31], 0, isr31);
+  idt_set_gate(&idt[0], 0, 1, isr0);
+  idt_set_gate(&idt[1], 0, 1, isr1);
+  idt_set_gate(&idt[2], 0, 1, isr2);
+  idt_set_gate(&idt[3], 0, 1, isr3);
+  idt_set_gate(&idt[4], 0, 1, isr4);
+  idt_set_gate(&idt[5], 0, 1, isr5);
+  idt_set_gate(&idt[6], 0, 1, isr6);
+  idt_set_gate(&idt[7], 0, 1, isr7);
+  idt_set_gate(&idt[8], 0, 1, isr8);
+  idt_set_gate(&idt[9], 0, 1, isr9);
+  idt_set_gate(&idt[10], 0, 1, isr10);
+  idt_set_gate(&idt[11], 0, 1, isr11);
+  idt_set_gate(&idt[12], 0, 1, isr12);
+  idt_set_gate(&idt[13], 0, 1, isr13);
+  idt_set_gate(&idt[14], 0, 1, isr14);
+  idt_set_gate(&idt[15], 0, 1, isr15);
+  idt_set_gate(&idt[16], 0, 1, isr16);
+  idt_set_gate(&idt[17], 0, 1, isr17);
+  idt_set_gate(&idt[18], 0, 1, isr18);
+  idt_set_gate(&idt[19], 0, 1, isr19);
+  idt_set_gate(&idt[20], 0, 1, isr20);
+  idt_set_gate(&idt[21], 0, 1, isr21);
+  idt_set_gate(&idt[22], 0, 1, isr22);
+  idt_set_gate(&idt[23], 0, 1, isr23);
+  idt_set_gate(&idt[24], 0, 1, isr24);
+  idt_set_gate(&idt[25], 0, 1, isr25);
+  idt_set_gate(&idt[26], 0, 1, isr26);
+  idt_set_gate(&idt[27], 0, 1, isr27);
+  idt_set_gate(&idt[28], 0, 1, isr28);
+  idt_set_gate(&idt[29], 0, 1, isr29);
+  idt_set_gate(&idt[30], 0, 1, isr30);
+  idt_set_gate(&idt[31], 0, 1, isr31);
 
   return 0;
 }
 
 void c_isr_handler(uint64_t ex_no, uint64_t rsp) {
+  vmm_load_pagemap(&kernel_pagemap);
+
   printf("\r\nCPU %lu: %s at %lx\r\n", get_locals()->cpu_number,
          exception_messages[ex_no], ((registers_t *)rsp)->rip);
 
