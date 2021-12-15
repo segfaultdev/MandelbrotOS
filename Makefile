@@ -35,19 +35,7 @@ $(HDD): $(KERNEL)
 	@ MTOOLSRC=resources/mtoolsrc mcopy build/prog/* c:/prog
 	@ ./resources/limine-install $@
 
-toolchain:
-	# Init them
-	@ echo "[CLONING SUBMODULES]"
-	@ git submodule init
-	@ git submodule update
-	
-	# Limine
-	@ echo "[BUILD LIMINE]"
-	@ cp -R thirdparty/limine/limine-install-linux-x86_64 resources/limine-install
-	@ cp -R thirdparty/limine/limine.sys resources
-	@ cp -R thirdparty/limine/BOOTX64.EFI resources
-
-toolchain_nonnative:	
+toolchain:	
 	# Init them
 	@ echo "[CLONING SUBMODULES]"
 	@ git submodule init
@@ -62,11 +50,6 @@ toolchain_nonnative:
 	# Cross compiler
 	@ echo "[BUILD CROSS COMPILER]"
 	@ ./cross-compiler.sh
-	 
-	# Set compiler 
-	@ echo "[SET MAKEFILE]"
-	@ sed -i 's/CC = gcc/CC = cross/bin/$(ARCH)-elf-gcc/g' config.mk
-	@ sed -i 's/LD = ld/LD = cross/bin/$(ARCH)-elf-ld/g' config.mk
 
 docker_build:
 	@ docker build -f buildenv/Dockerfile . -t mandelbrot

@@ -1,6 +1,6 @@
 include ../../../config.mk
 
-LD = ld
+LD = ../../../cross/bin/x86_64-elf-ld
 AS = nasm
 
 AFLAGS := \

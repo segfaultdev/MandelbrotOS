@@ -5,6 +5,7 @@ cross/
 *.o
 *.hdd
 *.elf
+build/
 
 # Editor specific files
 compile_flags.txt

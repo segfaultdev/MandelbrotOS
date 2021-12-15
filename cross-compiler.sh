@@ -59,7 +59,7 @@ make all-gcc -j$cores -l$load
 make all-target-libgcc -j$cores -l$load
 make install-gcc -j$cores -l$load
 make install-target-libgcc -j$cores -l$load
-cd ..
+cd ../..
 
 rm -rf buildcc
 

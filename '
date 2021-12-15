@@ -1,8 +1,7 @@
 include ../../../config.mk
 
-LD = ../../../cross/bin/x86_64-elf-ld
-CC = ../../../cross/bin/x86_64-elf-gcc
-AS = nasm
+LD = ../../cross/bin/x86_64-elf-ld
+CC = ../../cross/bin/x86_64-elf-gcc
 
 CFLAGS := -O3 \
 	-Isrc/include \

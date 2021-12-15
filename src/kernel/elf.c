@@ -6,7 +6,6 @@
 #include <mm/vmm.h>
 #include <printf.h>
 #include <string.h>
-#include <syscall.h>
 #include <tasking/scheduler.h>
 
 #define ROUND_UP(__addr, __align) (((__addr) + (__align) - 1) & ~((__align) - 1))

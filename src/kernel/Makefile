@@ -1,5 +1,9 @@
 include ../../config.mk
 
+LD = ../../cross/bin/x86_64-elf-ld
+CC = ../../cross/bin/x86_64-elf-gcc
+AS = nasm
+
 KERNEL =../../build/kernel/mandelbrotos.elf
 
 CFLAGS := $(CFLAGS) \
