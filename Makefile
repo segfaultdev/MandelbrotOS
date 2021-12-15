@@ -1,57 +1,23 @@
-ARCH = x86_64
-
-LD = ld
-CC = gcc
-AS = nasm
-
-# QEMU = qemu-system-$(ARCH) -hdd $(HDD) -smp 1 -M q35 -soundhw pcspk -serial stdio -rtc base=localtime
-QEMU = qemu-system-$(ARCH) -hdd $(HDD) -smp 2 -M q35 -soundhw pcspk -serial stdio -rtc base=localtime
-# QEMU = qemu-system-$(ARCH) -hdd $(HDD) -smp 1 -M q35 -soundhw pcspk -monitor stdio -d int -rtc base=localtime
+include config.mk
 
 QEMU_DOCKER = $(QEMU) -curses
 
-HDD = mandelbrotos.hdd
-KERNEL = $(BUILD_DIRECTORY)/mandelbrotos.elf
+all: clean guard kernel prog $(HDD) qemu
 
-ASFLAGS = -f elf64 -O3
+kernel:
+	@ cd src/kernel && make
 
-CFLAGS := \
-	-mcmodel=kernel \
-	-ffreestanding \
-	-Isrc/include \
-	-Werror \
-	-Wall \
-	-Wextra \
-	-lm \
-	-std=gnu99 \
-	-O3 \
-	-Isrc/include \
-	-mgeneral-regs-only \
-	-pipe \
-	-mno-red-zone \
-	-fno-pic -no-pie \
-	-fno-stack-protector \
-	-Wno-implicit-fallthrough \
-	-Wno-maybe-uninitialized \
-	-Wno-error=unused-parameter
+prog:
+	@ cd src/prog && make
 
-LDFLAGS := \
-	-static \
-	-Tresources/linker.ld \
-	-nostdlib \
-	-z max-page-size=0x1000
+qemu:
+	@ $(QEMU)
 
-CFILES := $(shell find src/ -name '*.c')
-ASFILES := $(shell find src/ -name '*.asm')
+qemu_docker: $(HDD)
+	@ $(QEMU_DOCKER)
 
-all: clean $(OS) qemu
-OBJ = $(patsubst %.c, $(BUILD_DIRECTORY)/%.c.o, $(CFILES)) \
-        $(patsubst %.asm, $(BUILD_DIRECTORY)/%.asm.o, $(ASFILES))
-
-BUILD_DIRECTORY := build
-DIRECTORY_GUARD = @mkdir -p $(@D)
-
-all: $(HDD) qemu
+guard:
+	@ $(DIRECTORY_GUARD)
 
 $(HDD): $(KERNEL)
 	@ echo "[HDD]"
@@ -62,33 +28,12 @@ $(HDD): $(KERNEL)
 	@ MTOOLSRC=resources/mtoolsrc mpartition -a c:
 	@ MTOOLSRC=resources/mtoolsrc mformat -c 8 -F c:
 	@ MTOOLSRC=resources/mtoolsrc mmd c:/boot
+	@ MTOOLSRC=resources/mtoolsrc mmd c:/prog
 	@ MTOOLSRC=resources/mtoolsrc mcopy resources/limine.cfg c:/boot
 	@ MTOOLSRC=resources/mtoolsrc mcopy resources/limine.sys c:/boot
 	@ MTOOLSRC=resources/mtoolsrc mcopy $< c:/boot/kernel
+	@ MTOOLSRC=resources/mtoolsrc mcopy build/prog/* c:/prog
 	@ ./resources/limine-install $@
-
-$(KERNEL): $(OBJ)
-	@ echo "[LD] $^"
-	@ $(LD) $(LDFLAGS) $^ -o $@
-
-$(BUILD_DIRECTORY)/%.c.o: %.c
-	@ echo "[CC] $^"	
-	@ $(DIRECTORY_GUARD)
-	@ $(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILD_DIRECTORY)/%.asm.o: %.asm
-	@ echo "[AS] $^"
-	@ $(DIRECTORY_GUARD)
-	@ $(AS) $(ASFLAGS) $< -o $@
-
-clean:
-	@ rm -rf $(BUILD_DIRECTORY) $(HDD)
-
-qemu: $(HDD)
-	@ $(QEMU)
-
-qemu_docker: $(HDD)
-	@ $(QEMU_DOCKER)
 
 toolchain:
 	# Init them
@@ -120,9 +65,12 @@ toolchain_nonnative:
 	 
 	# Set compiler 
 	@ echo "[SET MAKEFILE]"
-	@ sed -i 's/CC = gcc/CC = cross/bin/$(ARCH)-elf-gcc/g' Makefile
-	@ sed -i 's/LD = ld/LD = cross/bin/$(ARCH)-elf-ld/g' Makefile
+	@ sed -i 's/CC = gcc/CC = cross/bin/$(ARCH)-elf-gcc/g' config.mk
+	@ sed -i 's/LD = ld/LD = cross/bin/$(ARCH)-elf-ld/g' config.mk
 
 docker_build:
 	@ docker build -f buildenv/Dockerfile . -t mandelbrot
-	@ docker run -it mandelbrot make qemu_docker 
+	@ docker run -it mandelbrot make qemu_docker
+
+clean:
+	@ rm -rf $(BUILD_DIRECTORY) $(HDD) $(KERNEL)
