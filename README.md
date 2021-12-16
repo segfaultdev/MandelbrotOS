@@ -18,15 +18,11 @@ It's like tracing OS history, but with modern knowledge and without a lot of bud
 - `sudo apt-get install build-essential qemu nasm mtools`
 
 # Building the Toolchain
-Mandelbrot depends on some tools, like the limine bootloader and the GNU Toolchain.  
-If you are on an x86\_64 system run  
+Mandelbrot depends on some tools, like the limine bootloader and the GNU Toolchain. To get these, run: 
 ```
 make toolchain
 ```  
-If you are not run
-```
-make toolchain_nonnative
-```  
+
 After it's done, you can head over to [Building and Running](#building-and-running).
 
 # Building and Running

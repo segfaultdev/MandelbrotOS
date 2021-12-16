@@ -32,6 +32,7 @@ typedef struct thread {
   size_t tid;
   size_t time_slice;
   uint8_t fpu_storage[512];
+  int fpu_saved_before;
   uint64_t kernel_stack;
   proc_t *mother_proc;
   registers_t registers;
@@ -45,7 +46,8 @@ extern vec_proc_t processes;
 
 void scheduler_init(uintptr_t addr, struct stivale2_struct_tag_smp *smp_info);
 thread_t *sched_create_thread(char *name, uintptr_t addr, size_t time_slice,
-                              int user, int auto_enqueue, proc_t *mother_proc);
+                              int user, int auto_enqueue, proc_t *mother_proc,
+                              uint64_t arg1, uint64_t arg2, uint64_t arg3);
 proc_t *sched_create_proc(char *name, int user);
 void await_sched_start();
 void await();

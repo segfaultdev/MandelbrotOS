@@ -4,23 +4,22 @@ LD = ../../../cross/bin/x86_64-elf-ld
 CC = ../../../cross/bin/x86_64-elf-gcc
 AS = nasm
 
-CFLAGS := -O3 \
+CFLAGS := $(CFLAGS) \
 	-Isrc/include \
 	-ffreestanding \
 	-mno-red-zone \
 	-fno-pic -no-pie \
 	-static \
 
-AFLAGS := \
-	-felf64 -O3 \
+ASFLAGS := $(ASFLAGS) \
 	-static \
 
 LDFLAGS := \
 	-Tlinker.ld \
 
 CFILES := $(shell find src/ -name '*.c')
-AFILES := $(shell find src/ -name '*.asm')
-OFILES := $(CFILES:.c=.o) $(AFILES:.asm=.o)
+ASFILES := $(shell find src/ -name '*.asm')
+OFILES := $(CFILES:.c=.o) $(ASFILES:.asm=.o)
 
 TARGET = ../../../build/prog/julia
 
@@ -39,7 +38,7 @@ ld: $(OFILES)
 
 %.o: %.asm
 	@ echo "[AS] $<"
-	@ $(AS) $(AFLAGS) $< -o $@
+	@ $(AS) $(ASFLAGS) $< -o $@
 
 clean:
 	@ echo "[CLEAN]"

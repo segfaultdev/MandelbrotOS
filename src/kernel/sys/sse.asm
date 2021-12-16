@@ -1,6 +1,7 @@
 global enable_sse
 
 enable_sse:
+  fninit
   mov rax, cr0
   and ax, 0xFFFB
   or ax, 0x2

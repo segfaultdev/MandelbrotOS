@@ -58,7 +58,8 @@ void sched_enqueue_thread(thread_t *thread) {
 }
 
 thread_t *sched_create_thread(char *name, uintptr_t addr, size_t time_slice,
-                              int user, int auto_enqueue, proc_t *mother_proc) {
+                              int user, int auto_enqueue, proc_t *mother_proc,
+                              uint64_t arg1, uint64_t arg2, uint64_t arg3) {
   thread_t *new_thread = kmalloc(sizeof(thread_t));
 
   uint64_t stack = (uint64_t)pcalloc(STACK_SIZE / PAGE_SIZE);
@@ -76,8 +77,13 @@ thread_t *sched_create_thread(char *name, uintptr_t addr, size_t time_slice,
               .ss = (user) ? GDT_SEG_UDATA : GDT_SEG_KDATA,
               .rip = (uint64_t)addr,
               .rflags = 0x202,
+              .rdi = arg1,
+              .rsi = arg2,
+              .rdx = arg3,
           },
       .time_slice = (time_slice == 0) ? 5000 : time_slice,
+
+      .fpu_saved_before = 0,
   };
 
   if (user) {
@@ -233,7 +239,7 @@ void schedule(uint64_t rsp) {
       switch_and_run_stack((uintptr_t)rsp);
     }
 
-    asm volatile("fxsave %0" : : "m"(current_thread->fpu_storage));
+    asm volatile("fxsave %0" : "+m"(current_thread->fpu_storage) : : "memory");
     current_thread->registers = *((registers_t *)rsp);
     UNLOCK(current_thread->lock);
   }
@@ -256,9 +262,12 @@ void schedule(uint64_t rsp) {
   locals->current_thread = current_thread;
   locals->last_run_thread_index = new_index;
 
-  locals->tss.rsp[0] = current_thread->kernel_stack;
+  if (current_thread->fpu_saved_before)
+    asm volatile("fxrstor %0" : : "m"(current_thread->fpu_storage) : "memory");
+  else
+    current_thread->fpu_saved_before = 1;
 
-  asm volatile("fxrstor %0" : "=m"(current_thread->fpu_storage));
+  locals->tss.rsp[0] = current_thread->kernel_stack;
 
   lapic_eoi();
   lapic_timer_oneshot(SCHEDULE_REG, current_thread->time_slice);
@@ -294,7 +303,7 @@ void scheduler_init(uintptr_t addr, struct stivale2_struct_tag_smp *smp_info) {
 
   proc_t *kernel_proc = sched_create_proc("k_proc", 0);
 
-  sched_create_thread("k_init", addr, 5000, 0, 1, kernel_proc);
+  sched_create_thread("k_init", addr, 5000, 0, 1, kernel_proc, 0, 0, 0);
 
   cpu_count = smp_info->cpu_count;
 

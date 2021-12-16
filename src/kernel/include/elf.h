@@ -23,9 +23,22 @@ typedef struct elf_header {
   uint16_t prog_head_count;
 
   uint16_t sect_head_size;
-  uint16_t sect_head_num;
+  uint16_t sect_head_count;
   uint16_t sect_string_table;
 } __attribute__((packed)) elf_header_t;
+
+typedef struct elf_sect_header {
+  uint32_t name;
+  uint32_t type;
+  uint64_t flags;
+  uint64_t addr;
+  uint64_t offset;
+  uint64_t size;
+  uint32_t link;
+  uint32_t info;
+  uint64_t addr_align;
+  uint64_t entry_size;
+} elf_sect_header_t;
 
 typedef struct elf_prog_header {
   uint32_t type;
@@ -40,6 +53,7 @@ typedef struct elf_prog_header {
   uint64_t reserved1;
 } __attribute__((packed)) elf_prog_header_t;
 
-uint8_t elf_run_binary(char *name, char *path, proc_t *proc, size_t time_slice);
+uint8_t elf_run_binary(char *name, char *path, proc_t *proc, size_t time_slice,
+                       uint64_t arg1, uint64_t arg2, uint64_t arg3);
 
 #endif

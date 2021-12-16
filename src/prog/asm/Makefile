@@ -3,12 +3,11 @@ include ../../../config.mk
 LD = ../../../cross/bin/x86_64-elf-ld
 AS = nasm
 
-AFLAGS := \
-	-felf64 -O3 \
+ASFLAGS := $(ASFLAGS) \
 	-static \
 
-AFILES := $(shell find src/ -name '*.asm')
-OFILES := $(AFILES:.asm=.o)
+ASFILES := $(shell find src/ -name '*.asm')
+OFILES := $(ASFILES:.asm=.o)
 
 TARGET = ../../../build/prog/asm
 
@@ -23,7 +22,7 @@ ld: $(OFILES)
 
 %.o: %.asm
 	@ echo "[AS] $<"
-	@ $(AS) $(AFLAGS) $< -o $@
+	@ $(AS) $(ASFLAGS) $< -o $@
 
 clean:
 	@ echo "[CLEAN]"

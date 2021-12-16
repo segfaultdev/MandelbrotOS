@@ -1,7 +1,7 @@
 HDD = mandelbrotos.hdd
 
-# QEMU = qemu-system-x86_64 -hdd $(HDD) -smp 1 -M q35 -soundhw pcspk -serial stdio -rtc base=localtime
-QEMU = qemu-system-x86_64 -hdd $(HDD) -smp 2 -M q35 -soundhw pcspk -serial stdio -rtc base=localtime
+# QEMU = qemu-system-x86_64 -hdd $(HDD) -smp 1 -M q35 -soundhw pcspk -serial stdio -rtc base=localtime -enable-kvm
+QEMU = qemu-system-x86_64 -hdd $(HDD) -smp 2 -M q35 -soundhw pcspk -serial stdio -rtc base=localtime -enable-kvm
 # QEMU = qemu-system-x86_64 -hdd $(HDD) -smp 1 -M q35 -soundhw pcspk -monitor stdio -d int -rtc base=localtime
 
 KERNEL = build/kernel/mandelbrotos.elf

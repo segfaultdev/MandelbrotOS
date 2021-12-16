@@ -1,3 +1,4 @@
+#include <fb/fb.h>
 #include <lock.h>
 #include <mm/kheap.h>
 #include <mm/pmm.h>
@@ -8,7 +9,7 @@
 
 #define ALIGN_DOWN(__addr, __align) ((__addr) & ~((__align)-1))
 
-static volatile lock_t vmm_lock = {0};
+lock_t vmm_lock = {0};
 pagemap_t kernel_pagemap;
 
 static uint64_t *vmm_get_next_level(uint64_t *table, size_t index,
@@ -154,6 +155,12 @@ pagemap_t *vmm_create_new_pagemap() {
 
   for (uintptr_t i = 256; i < 512; i++)
     user_top[i] = kernel_top[i];
+
+  for (uintptr_t i = 0;
+       i < (uintptr_t)(fb_width * fb_height * sizeof(uint32_t)); i += PAGE_SIZE)
+    vmm_map_page(
+        new_map, vmm_virt_to_phys(&kernel_pagemap, (uintptr_t)framebuffer) + i,
+        vmm_virt_to_phys(&kernel_pagemap, (uintptr_t)framebuffer) + i, 0b111);
 
   return new_map;
 }

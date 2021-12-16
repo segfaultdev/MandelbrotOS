@@ -7,6 +7,7 @@
 extern uint32_t curr_fg_col;
 extern uint32_t curr_bg_col;
 
+extern uint32_t *framebuffer;
 extern uint16_t fb_height;
 extern uint16_t fb_width;
 

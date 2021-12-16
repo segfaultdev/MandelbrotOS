@@ -1,6 +1,6 @@
-global syscall
+global intsyscall
 
-syscall:
+intsyscall:
   push rax
   push rbx
   push rcx
