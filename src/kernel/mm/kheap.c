@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#define ROUND_UP(A, B)                                                          \
+#define ROUND_UP(A, B)                                                         \
   ({                                                                           \
     __typeof__(A) _a_ = A;                                                     \
     __typeof__(B) _b_ = B;                                                     \
@@ -16,7 +16,8 @@
 lock_t liballoc_slock = {0};
 
 void *liballoc_alloc(int size) {
-  return (void *)((uintptr_t)pcalloc(ROUND_UP(size, PAGE_SIZE)) + PHYS_MEM_OFFSET);
+  return (void *)((uintptr_t)pcalloc(ROUND_UP(size, PAGE_SIZE)) +
+                  PHYS_MEM_OFFSET);
 }
 
 int liballoc_free_(void *ptr, int pages) {

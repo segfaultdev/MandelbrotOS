@@ -7,7 +7,7 @@
 #define SYSCALL_OPEN 3
 #define SYSCALL_READ 4
 
-#define ITTERATIONS 100
+#define ITTERATIONS 60
 
 #define ABS(x) ((x < 0) ? (-x) : x)
 
@@ -16,6 +16,29 @@ uint16_t height;
 uint32_t *framebuffer;
 
 void intsyscall(uint64_t id, uint64_t arg1, uint64_t arg2, uint64_t arg3);
+
+static inline double cos(double x) {
+  register double val;
+  asm volatile("fcos\n" : "=t"(val) : "0"(x));
+  return val;
+}
+
+static inline double sin(double x) {
+  register double val;
+  asm volatile("fsin\n" : "=t"(val) : "0"(x));
+  return val;
+}
+
+static inline double tan(double x) {
+  return sin(x) / cos(x);
+}
+
+static inline double sqrt (double x)
+{
+  double res;
+  asm ("fsqrt" : "=t" (res) : "0" (x));
+  return res;
+}
 
 void rect(size_t startx, size_t starty, size_t length, size_t height,
           uint32_t colour) {
@@ -77,14 +100,34 @@ void draw(double real, double imag) {
   }
 }
 
-void cmain(uint64_t arg1, uint64_t arg2, uint64_t arg3) {
-  intsyscall(0, (uint64_t)"wtf", 0, 0);
-
+void main(uint64_t arg1, uint64_t arg2, uint64_t arg3) {
   framebuffer = (uint32_t *)arg1;
   width = arg2;
   height = arg3;
 
-  for (double i = -1, c = 1, count = 0; count < 1200;
-       i += 0.005, c -= 0.005, count++)
-    draw(c, i);
+  // 4 really cool alorithms to choose from
+
+  /* double a = -5; */
+  /* while (1) { */
+    /* draw(0.7885 * cos(a), 0.7885 * sin(a)); */
+    /* a += 0.005; */
+  /* } */
+
+  /* double a = -5; */
+  /* while (1) { */
+    /* draw(0.7885 * tan(a), 0.7885 * sin(a)); */
+    /* a += 0.005; */
+  /* } */
+
+  /* double a = -5; */
+  /* while (1) { */
+    /* draw(tan(a), tan(sin(a * 10) * 1)); */
+    /* a += 0.005; */
+  /* } */
+
+  double a = -5;
+  while (1) {
+    draw(tan(a), cos(a)/(1 + (1 / (1 + cos(a * a)) + ABS(tan(a * a)))));
+    a += 0.005;
+  }
 }

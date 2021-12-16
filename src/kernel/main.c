@@ -60,7 +60,6 @@ void k_thread() {
   klog_init(init_vfs(), "Virtual filesystem");
 
   proc_t *user_proc = sched_create_proc("u_proc", 1);
-  /* elf_run_binary("asm", "A:/prog/julia", user_proc, 5000, 'C', 'A', 'Y'); */
   elf_run_binary(
       "asm", "A:/prog/julia", user_proc, 5000,
       (uint64_t)vmm_virt_to_phys(&kernel_pagemap, (uintptr_t)framebuffer),

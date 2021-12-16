@@ -8,7 +8,7 @@
 #include <string.h>
 #include <tasking/scheduler.h>
 
-#define ALIGN_UP(__addr, __align) (((__addr) + (__align)-1) & ~((__align) - 1))
+#define ALIGN_UP(__addr, __align) (((__addr) + (__align)-1) & ~((__align)-1))
 
 #define ELF_RELOCATEABLE 1
 #define ELF_EXECUTABLE 2
@@ -21,7 +21,7 @@ char elf_ident[4] = {0x7f, 'E', 'L', 'F'};
 
 // TYSM OSDEV wiki
 static inline elf_sect_header_t *elf_sheader(elf_header_t *hdr) {
-  return (elf_sect_header_t *)((int)(uint64_t)hdr + hdr->sect_head_off);
+  return (elf_sect_header_t *)((uint32_t)(uint64_t)hdr + hdr->sect_head_off);
 }
 
 uint8_t elf_run_binary(char *name, char *path, proc_t *proc, size_t time_slice,

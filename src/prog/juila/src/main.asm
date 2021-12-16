@@ -23,8 +23,8 @@ intsyscall:
 
 global _start
 
-extern cmain
+extern main
 
 _start:
-  call cmain
+  call main
   jmp $
