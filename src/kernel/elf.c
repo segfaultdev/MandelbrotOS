@@ -53,6 +53,8 @@ uint8_t elf_run_binary(char *name, char *path, proc_t *proc, size_t time_slice,
       for (size_t j = 0; j < ROUND_UP(sect_header->size, PAGE_SIZE) / PAGE_SIZE;
            j += PAGE_SIZE)
         vmm_map_page(proc->pagemap, mem + j, sect_header->addr + j, 0b111);
+
+      memset((void *)mem, 0, ROUND_UP(sect_header->size, PAGE_SIZE));
     }
   }
 

@@ -6,19 +6,12 @@
 #include <stdint.h>
 #include <string.h>
 
-#define ROUNDUP(A, B)                                                          \
-  ({                                                                           \
-    __typeof__(A) _a_ = A;                                                     \
-    __typeof__(B) _b_ = B;                                                     \
-    (_a_ + (_b_ - 1)) / _b_;                                                   \
-  })
+#define ROUND_UP(__addr, __align) (((__addr) + (__align)-1) & ~((__align)-1))
 
-static volatile lock_t liballoc_slock = {0};
+lock_t liballoc_slock = {0};
 
 void *liballoc_alloc(int size) {
-  uintptr_t ptr = (uintptr_t)pcalloc(ROUNDUP(size, PAGE_SIZE));
-  ptr += PHYS_MEM_OFFSET;
-  return (void *)ptr;
+  return (void *)((uintptr_t)pcalloc(ROUND_UP(size, PAGE_SIZE)) + PHYS_MEM_OFFSET);
 }
 
 int liballoc_free_(void *ptr, int pages) {
