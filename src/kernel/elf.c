@@ -8,7 +8,7 @@
 #include <string.h>
 #include <tasking/scheduler.h>
 
-#define ROUND_UP(__addr, __align) (((__addr) + (__align)-1) & ~((__align)-1))
+#define ALIGN_UP(__addr, __align) (((__addr) + (__align)-1) & ~((__align) - 1))
 
 #define ELF_RELOCATEABLE 1
 #define ELF_EXECUTABLE 2
@@ -48,13 +48,11 @@ uint8_t elf_run_binary(char *name, char *path, proc_t *proc, size_t time_slice,
     }
     if (sect_header->type == ELF_SECT_NOBITS) {
       uintptr_t mem = (uintptr_t)pmalloc(
-          ROUND_UP(sect_header->size, PAGE_SIZE) / PAGE_SIZE);
+          ALIGN_UP(sect_header->size, PAGE_SIZE) / PAGE_SIZE);
 
-      for (size_t j = 0; j < ROUND_UP(sect_header->size, PAGE_SIZE) / PAGE_SIZE;
+      for (size_t j = 0; j < ALIGN_UP(sect_header->size, PAGE_SIZE) / PAGE_SIZE;
            j += PAGE_SIZE)
         vmm_map_page(proc->pagemap, mem + j, sect_header->addr + j, 0b111);
-
-      memset((void *)mem, 0, ROUND_UP(sect_header->size, PAGE_SIZE));
     }
   }
 
@@ -63,10 +61,10 @@ uint8_t elf_run_binary(char *name, char *path, proc_t *proc, size_t time_slice,
   for (size_t i = 0; i < header->prog_head_count; i++) {
     if (prog_header->type == ELF_HEAD_LOAD) {
       uintptr_t mem = (uintptr_t)pmalloc(
-          ROUND_UP(prog_header->mem_size, PAGE_SIZE) / PAGE_SIZE);
+          ALIGN_UP(prog_header->mem_size, PAGE_SIZE) / PAGE_SIZE);
 
       for (size_t j = 0;
-           j < ROUND_UP(prog_header->mem_size, PAGE_SIZE) / PAGE_SIZE;
+           j < ALIGN_UP(prog_header->mem_size, PAGE_SIZE) / PAGE_SIZE;
            j += PAGE_SIZE)
         vmm_map_page(proc->pagemap, mem + j, prog_header->virt_addr + j, 0b111);
 

@@ -6,7 +6,12 @@
 #include <stdint.h>
 #include <string.h>
 
-#define ROUND_UP(__addr, __align) (((__addr) + (__align)-1) & ~((__align)-1))
+#define ROUND_UP(A, B)                                                          \
+  ({                                                                           \
+    __typeof__(A) _a_ = A;                                                     \
+    __typeof__(B) _b_ = B;                                                     \
+    (_a_ + (_b_ - 1)) / _b_;                                                   \
+  })
 
 lock_t liballoc_slock = {0};
 

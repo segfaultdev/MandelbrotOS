@@ -78,6 +78,8 @@ void draw(double real, double imag) {
 }
 
 void cmain(uint64_t arg1, uint64_t arg2, uint64_t arg3) {
+  intsyscall(0, (uint64_t)"wtf", 0, 0);
+
   framebuffer = (uint32_t *)arg1;
   width = arg2;
   height = arg3;
