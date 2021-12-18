@@ -8,7 +8,6 @@
 // Gotten from https://github.com/rxi/vec
 
 #include <mm/kheap.h>
-#include <mm/liballoc.h>
 #include <string.h>
 
 static inline int vec_expand_(char **data, int *length, int *capacity,
@@ -28,7 +27,7 @@ static inline int vec_reserve_(char **data, int *length, int *capacity,
                                int memsz, int n) {
   (void)length;
   if (n > *capacity) {
-    void *ptr = liballoc_realloc(*data, n * memsz);
+    void *ptr = krealloc(*data, n * memsz);
     if (ptr == NULL)
       return -1;
     *data = ptr;
@@ -56,7 +55,7 @@ static inline int vec_compact_(char **data, int *length, int *capacity,
     return 0;
   } else {
     int n = *length;
-    void *ptr = liballoc_realloc(*data, n * memsz);
+    void *ptr = krealloc(*data, n * memsz);
     if (ptr == NULL)
       return -1;
     *capacity = n;

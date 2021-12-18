@@ -39,7 +39,7 @@ void kfree(void *ptr) { liballoc_free(ptr); }
 void *krealloc(void *ptr, size_t size) { return liballoc_realloc(ptr, size); }
 
 void *kcalloc(size_t size) {
-  void *ptr = liballoc_alloc(size);
+  void *ptr = liballoc_malloc(size);
   memset(ptr, 0, size);
   return ptr;
 }

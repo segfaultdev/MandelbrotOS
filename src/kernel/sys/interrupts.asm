@@ -147,12 +147,39 @@ syscall_isr:
   cli
   cld
 
-  pushaq
+  ; The reason we use this instead of pushaq is so that I can change rax, AKA: the return value
+  push rbx
+  push rcx
+  push rdx
+  push rsi
+  push rdi
+  push rbp
+  push r8
+  push r9
+  push r10
+  push r11
+  push r12
+  push r13
+  push r14
+  push r15
 
   mov rdi, rsp
   call c_syscall_handler
   
-  popaq
+  pop r15
+  pop r14
+  pop r13
+  pop r12
+  pop r11
+  pop r10
+  pop r9
+  pop r8
+  pop rbp
+  pop rdi
+  pop rsi
+  pop rdx
+  pop rcx
+  pop rbx
 
   iretq
 
@@ -162,9 +189,12 @@ extern schedule
 
 schedule_irq:
   cli
+  cld
+  
   push 0
   push 16
-  cld
+  
   pushaq
+  
   mov rdi, rsp
   call schedule

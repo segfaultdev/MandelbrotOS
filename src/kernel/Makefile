@@ -9,7 +9,6 @@ KERNEL =../../build/kernel/mandelbrotos.elf
 CFLAGS := $(CFLAGS) \
 	-mcmodel=kernel \
 	-ffreestanding \
-	-Isrc/include \
 	-I./include \
 	-mno-red-zone \
 	-mgeneral-regs-only \

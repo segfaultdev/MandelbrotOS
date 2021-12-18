@@ -4,13 +4,21 @@
 #include <fs/vfs.h>
 #include <stdint.h>
 
-#define SYSCALL_PRINT 0
-#define SYSCALL_PUTCHAR 1
-#define SYSCALL_PUTPIXEL 2
-#define SYSCALL_OPEN 3
-#define SYSCALL_READ 4
+#define SYSCALL_OPEN 0
+#define SYSCALL_CLOSE 1
+#define SYSCALL_READ 2
+#define SYSCALL_WRITE 3
+#define SYSCALL_SEEK 4
+#define SYSCALL_EXEC 5
+#define SYSCALL_PSBRK 6
+
+#define SEEK_ZERO 0
+#define SEEK_FORWARDS 1
+#define SEEK_BACKWARDS 2
 
 typedef struct syscall_file {
+  char *path;
+
   fs_file_t file;
 
   uint8_t *buffer;
@@ -21,7 +29,6 @@ typedef struct syscall_file {
   size_t offset;
 } syscall_file_t;
 
-void syscall(uint64_t id, uint64_t arg1, uint64_t arg2, uint64_t arg3);
 int init_syscalls();
 
 #endif

@@ -10,6 +10,8 @@
 #include <registers.h>
 #include <vec.h>
 
+#define STANDARD_TIME_SLICE 5000
+
 struct thread;
 
 typedef struct proc {
@@ -17,6 +19,8 @@ typedef struct proc {
   int status;
   int enqueued;
   pagemap_t *pagemap;
+  void *heap;
+  size_t heap_size;
   size_t pid;
   size_t thread_count;
   uintptr_t virtual_stack_top;

@@ -29,14 +29,11 @@ static inline double sin(double x) {
   return val;
 }
 
-static inline double tan(double x) {
-  return sin(x) / cos(x);
-}
+static inline double tan(double x) { return sin(x) / cos(x); }
 
-static inline double sqrt (double x)
-{
+static inline double sqrt(double x) {
   double res;
-  asm ("fsqrt" : "=t" (res) : "0" (x));
+  asm("fsqrt" : "=t"(res) : "0"(x));
   return res;
 }
 
@@ -107,27 +104,27 @@ void main(uint64_t arg1, uint64_t arg2, uint64_t arg3) {
 
   // 4 really cool alorithms to choose from
 
-  /* double a = -5; */
-  /* while (1) { */
-    /* draw(0.7885 * cos(a), 0.7885 * sin(a)); */
-    /* a += 0.005; */
-  /* } */
-
-  /* double a = -5; */
-  /* while (1) { */
-    /* draw(0.7885 * tan(a), 0.7885 * sin(a)); */
-    /* a += 0.005; */
-  /* } */
-
-  /* double a = -5; */
-  /* while (1) { */
-    /* draw(tan(a), tan(sin(a * 10) * 1)); */
-    /* a += 0.005; */
-  /* } */
-
-  double a = -5;
+  double a = 0;
   while (1) {
-    draw(tan(a), cos(a)/(1 + (1 / (1 + cos(a * a)) + ABS(tan(a * a)))));
+    draw(0.7885 * cos(a), 0.7885 * sin(a));
     a += 0.005;
   }
+
+  /* double a = 0; */
+  /* while (1) { */
+  /* draw(0.7885 * tan(a), 0.7885 * sin(a)); */
+  /* a += 0.005; */
+  /* } */
+
+  /* double a = 0; */
+  /* while (1) { */
+  /* draw(tan(a), tan(sin(a * 10) * 1)); */
+  /* a += 0.005; */
+  /* } */
+
+  /* double a = 0; */
+  /* while (1) { */
+  /* draw(tan(a), cos(a)/(1 + (1 / (1 + cos(a * a)) + ABS(tan(a * a))))); */
+  /* a += 0.005; */
+  /* } */
 }

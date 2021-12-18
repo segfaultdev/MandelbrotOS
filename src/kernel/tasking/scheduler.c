@@ -22,6 +22,7 @@
 #define DEAD 1
 
 #define STACK_SIZE 0x20000
+#define INITIAL_HEAP_SIZE 32
 
 size_t cpu_count;
 
@@ -81,7 +82,7 @@ thread_t *sched_create_thread(char *name, uintptr_t addr, size_t time_slice,
               .rsi = arg2,
               .rdx = arg3,
           },
-      .time_slice = (time_slice == 0) ? 5000 : time_slice,
+      .time_slice = (time_slice == 0) ? STANDARD_TIME_SLICE : time_slice,
 
       .fpu_saved_before = 0,
   };
@@ -133,6 +134,14 @@ proc_t *sched_create_proc(char *name, int user) {
   };
 
   new_proc->threads.data = kmalloc(sizeof(thread_t *));
+
+  if (user) {
+    new_proc->heap = pmalloc(INITIAL_HEAP_SIZE);
+    new_proc->heap_size = INITIAL_HEAP_SIZE;
+    for (size_t i = 0; i < INITIAL_HEAP_SIZE * PAGE_SIZE; i += PAGE_SIZE)
+      vmm_map_page(new_proc->pagemap, (uintptr_t)new_proc->heap + i,
+                   (uintptr_t)new_proc->heap + i, 0b111);
+  }
 
   sched_enqueue_proc(new_proc);
 
@@ -303,7 +312,8 @@ void scheduler_init(uintptr_t addr, struct stivale2_struct_tag_smp *smp_info) {
 
   proc_t *kernel_proc = sched_create_proc("k_proc", 0);
 
-  sched_create_thread("k_init", addr, 5000, 0, 1, kernel_proc, 0, 0, 0);
+  sched_create_thread("k_init", addr, STANDARD_TIME_SLICE, 0, 1, kernel_proc, 0,
+                      0, 0);
 
   cpu_count = smp_info->cpu_count;
 
