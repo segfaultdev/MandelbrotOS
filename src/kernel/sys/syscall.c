@@ -17,19 +17,18 @@
 
 #define ABS(x) ((x < 0) ? (-x) : x)
 
+#define MAX_HEAP_SIZE 0x10000
 #define CURRENT_PAGEMAP get_locals()->current_thread->mother_proc->pagemap
+#define CURRENT_PROC get_locals()->current_thread->mother_proc
 
 typedef signed long ssize_t;
 
 extern void syscall_isr();
 
-vec_t(syscall_file_t) open_files;
-
 lock_t syscall_lock = {0};
 
 int init_syscalls() {
   idt_set_gate(&idt[0x45], 1, 0, syscall_isr);
-  open_files.data = kmalloc(sizeof(open_files));
   return 0;
 }
 
@@ -47,22 +46,22 @@ size_t syscall_open(char *path) {
       .buffer = kmalloc(file.file_size),
       .file = file,
       .path = kmalloc(strlen(path)),
-      .index = open_files.length,
+      .index = CURRENT_PROC->fds.length,
   };
   strcpy(sfile.path, path);
 
   vfs_read(path, 0, file.file_size, sfile.buffer);
 
-  vec_push(&open_files, sfile);
+  vec_push(&CURRENT_PROC->fds, sfile);
 
-  return (size_t)open_files.length - 1;
+  return (size_t)CURRENT_PROC->fds.length - 1;
 }
 
 void syscall_close(size_t id) {
-  if (id > (size_t)open_files.length - 1)
+  if (id > (size_t)CURRENT_PROC->fds.length - 1)
     return;
 
-  syscall_file_t *file = &open_files.data[id];
+  syscall_file_t *file = &CURRENT_PROC->fds.data[id];
 
   vfs_write(file->path, 0, file->size, file->buffer);
 
@@ -71,10 +70,10 @@ void syscall_close(size_t id) {
 }
 
 void syscall_read(size_t id, uint8_t *buffer, size_t size) {
-  if (id > (size_t)open_files.length - 1)
+  if (id > (size_t)CURRENT_PROC->fds.length - 1)
     return;
 
-  syscall_file_t *file = &open_files.data[id];
+  syscall_file_t *file = &CURRENT_PROC->fds.data[id];
 
   if (size > file->size - file->offset)
     size = file->size - file->offset;
@@ -86,10 +85,10 @@ void syscall_read(size_t id, uint8_t *buffer, size_t size) {
 }
 
 void syscall_write(size_t id, uint8_t *buffer, size_t size) {
-  if (id > (size_t)open_files.length - 1)
+  if (id > (size_t)CURRENT_PROC->fds.length - 1)
     return;
 
-  syscall_file_t *file = &open_files.data[id];
+  syscall_file_t *file = &CURRENT_PROC->fds.data[id];
 
   if (size > file->size - file->offset) {
     file->buffer = krealloc(file->buffer, size + file->offset);
@@ -103,10 +102,10 @@ void syscall_write(size_t id, uint8_t *buffer, size_t size) {
 }
 
 void syscall_seek(size_t id, size_t offset, int mode) {
-  if (id > (size_t)open_files.length - 1)
+  if (id > (size_t)CURRENT_PROC->fds.length - 1)
     return;
 
-  syscall_file_t *file = &open_files.data[id];
+  syscall_file_t *file = &CURRENT_PROC->fds.data[id];
 
   switch (mode) {
     case SEEK_ZERO:
@@ -139,34 +138,25 @@ void syscall_exec(char *name, char *path, uint64_t arg1, uint64_t arg2,
                  STANDARD_TIME_SLICE, arg1, arg2, arg3);
 }
 
-uint64_t syscall_psbrk(ssize_t count) {
-  if (count > 0) {
-    void *mem = pmalloc(count);
-    for (size_t i = 0; i < (size_t)count * PAGE_SIZE; i += PAGE_SIZE)
-      vmm_map_page(CURRENT_PAGEMAP, (uintptr_t)mem + i,
-                   (uintptr_t)get_locals()->current_thread->mother_proc->heap +
-                       get_locals()->current_thread->mother_proc->heap_size *
-                           PAGE_SIZE +
-                       i,
-                   0b111);
-    get_locals()->current_thread->mother_proc->heap_size += count;
-    return (uint64_t)mem;
-  } else {
-    count = ABS(count);
-    for (size_t i = 0; i < (size_t)count * PAGE_SIZE; i += PAGE_SIZE)
-      vmm_unmap_page(
-          CURRENT_PAGEMAP,
-          (uintptr_t)get_locals()->current_thread->mother_proc->heap +
-              get_locals()->current_thread->mother_proc->heap_size * PAGE_SIZE -
-              i);
-    pmm_free_pages(
-        (void *)get_locals()->current_thread->mother_proc->heap +
-            (get_locals()->current_thread->mother_proc->heap_size - count) *
-                PAGE_SIZE,
-        count);
-    get_locals()->current_thread->mother_proc->heap_size -= count;
+uint64_t syscall_sbrk(size_t size) {
+  if (CURRENT_PROC->heap_size + size > MAX_HEAP_SIZE)
     return 0;
+
+  if (CURRENT_PROC->heap_capacity < size) {
+    void *new_mem = pmalloc(size / PAGE_SIZE + PAGE_SIZE);
+
+    for (uintptr_t i = 0; i < size / PAGE_SIZE + PAGE_SIZE; i += PAGE_SIZE)
+      vmm_map_page(CURRENT_PAGEMAP, (uintptr_t)new_mem + PHYS_MEM_OFFSET + i, (uintptr_t)CURRENT_PROC->heap + CURRENT_PROC->heap_capacity + i, 0b111);
+
+    CURRENT_PROC->heap_capacity += (size / PAGE_SIZE + PAGE_SIZE);
+    CURRENT_PROC->heap_size += size;
+
+    return (uintptr_t)CURRENT_PROC->heap + CURRENT_PROC->heap_size;
   }
+  
+  CURRENT_PROC->heap_size += size;
+
+  return (uintptr_t)CURRENT_PROC->heap + CURRENT_PROC->heap_size;
 }
 
 uint64_t c_syscall_handler(uint64_t rsp) {
@@ -195,8 +185,8 @@ uint64_t c_syscall_handler(uint64_t rsp) {
       syscall_exec((char *)registers->rdi, (char *)registers->rsi,
                    registers->rdx, registers->rcx, registers->r8);
       break;
-    case SYSCALL_PSBRK:
-      ret = syscall_psbrk(registers->rdi);
+    case SYSCALL_SBRK:
+      syscall_sbrk(registers->rdi);
       break;
     default:
       break;

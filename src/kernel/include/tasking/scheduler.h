@@ -9,6 +9,7 @@
 #include <mm/vmm.h>
 #include <registers.h>
 #include <vec.h>
+#include <sys/syscall.h>
 
 #define STANDARD_TIME_SLICE 5000
 
@@ -19,11 +20,13 @@ typedef struct proc {
   int status;
   int enqueued;
   pagemap_t *pagemap;
-  void *heap;
+  uint8_t *heap;
   size_t heap_size;
+  size_t heap_capacity;
   size_t pid;
   size_t thread_count;
   uintptr_t virtual_stack_top;
+  vec_t(syscall_file_t) fds;
   vec_t(struct thread *) threads;
 } proc_t;
 

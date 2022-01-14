@@ -22,7 +22,7 @@
 #define DEAD 1
 
 #define STACK_SIZE 0x20000
-#define INITIAL_HEAP_SIZE 32
+#define INITIAL_HEAP_SIZE 0x4000
 
 size_t cpu_count;
 
@@ -136,12 +136,18 @@ proc_t *sched_create_proc(char *name, int user) {
   new_proc->threads.data = kmalloc(sizeof(thread_t *));
 
   if (user) {
-    new_proc->heap = pmalloc(INITIAL_HEAP_SIZE);
-    new_proc->heap_size = INITIAL_HEAP_SIZE;
-    for (size_t i = 0; i < INITIAL_HEAP_SIZE * PAGE_SIZE; i += PAGE_SIZE)
+    new_proc->heap = pmalloc(INITIAL_HEAP_SIZE / PAGE_SIZE);
+    new_proc->heap_size = INITIAL_HEAP_SIZE / PAGE_SIZE;
+    for (size_t i = 0; i < INITIAL_HEAP_SIZE / PAGE_SIZE * PAGE_SIZE; i += PAGE_SIZE)
       vmm_map_page(new_proc->pagemap, (uintptr_t)new_proc->heap + i,
                    (uintptr_t)new_proc->heap + i, 0b111);
+    
+    new_proc->heap_capacity = INITIAL_HEAP_SIZE / PAGE_SIZE * PAGE_SIZE; 
+    new_proc->heap_size = 0;
   }
+
+
+  new_proc->fds.data = kmalloc(sizeof(syscall_file_t));
 
   sched_enqueue_proc(new_proc);
 

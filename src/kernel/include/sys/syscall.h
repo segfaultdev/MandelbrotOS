@@ -10,7 +10,7 @@
 #define SYSCALL_WRITE 3
 #define SYSCALL_SEEK 4
 #define SYSCALL_EXEC 5
-#define SYSCALL_PSBRK 6
+#define SYSCALL_SBRK 6
 
 #define SEEK_ZERO 0
 #define SEEK_FORWARDS 1

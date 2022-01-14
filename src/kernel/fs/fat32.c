@@ -941,6 +941,8 @@ uint8_t fat_write_file(size_t part, char *path, size_t offset, uint8_t *buffer,
   entry.modified_minute = time.minutes;
   entry.modified_second = time.seconds / 2;
 
+  entry.size = offset + count;
+
   fat_set_dir_entry(part, dir, index, entry);
 
   kfree(file_buffer);
