@@ -1,15 +1,15 @@
 #ifndef __SCHEDULER_H__
 #define __SCHEDULER_H__
 
-#include <stddef.h>
-#include <stdint.h>
-
 #include <boot/stivale2.h>
+#include <fs/vfs.h>
 #include <lock.h>
 #include <mm/vmm.h>
 #include <registers.h>
-#include <vec.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <sys/syscall.h>
+#include <vec.h>
 
 #define STANDARD_TIME_SLICE 5000
 
@@ -26,7 +26,7 @@ typedef struct proc {
   size_t pid;
   size_t thread_count;
   uintptr_t virtual_stack_top;
-  vec_t(syscall_file_t) fds;
+  vec_t(fs_file_t) fds;
   vec_t(struct thread *) threads;
 } proc_t;
 

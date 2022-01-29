@@ -14,17 +14,12 @@ typedef struct mbr_partition_table {
   uint32_t lba_sectors_count;
 } __attribute__((packed)) mbr_partition_table_t;
 
-typedef struct valid_partiton_and_drive {
-  size_t portno;
+typedef struct partition_layout {
   uint8_t partition_number;
   uint32_t sector_start;
   uint32_t length_in_sectors;
-} valid_partiton_and_drive_t;
+} partition_layout_t;
 
-typedef vec_t(valid_partiton_and_drive_t) vec_valid_partiton_and_drive_t;
-
-extern vec_valid_partiton_and_drive_t valid_partitons;
-
-int parse_mbr();
+partition_layout_t *probe_mbr(device_t *dev, size_t num);
 
 #endif

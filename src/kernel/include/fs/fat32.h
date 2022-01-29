@@ -21,14 +21,14 @@ typedef struct bpb {
 
   uint8_t media_type;
 
-  uint16_t legacy_sectors_per_fat;
+  uint16_t legacy_table_size;
   uint16_t sectors_per_track;
   uint16_t head_count;
 
   uint32_t hidden_sectors;
   uint32_t large_sector_count;
 
-  uint32_t sectors_per_fat;
+  uint32_t table_size;
 
   uint16_t flags;
 
@@ -109,21 +109,22 @@ typedef struct long_filename {
   uint16_t filename_hi[2];
 } __attribute__((packed)) long_filename_t;
 
-typedef struct fat_partition {
+typedef struct fat_fs_private_info {
   bpb_t boot;
 
   uint32_t sector_start;
   uint32_t sector_length;
 
-  size_t drive;
   uint8_t partiton;
-} fat_partition_t;
+} fat_fs_private_info_t;
 
-typedef vec_t(fat_partition_t) vec_fat_partition_t;
-
-extern vec_fat_partition_t fat_parts;
+typedef struct fat_file_private_info {
+  dir_entry_t dir;
+  size_t index;
+  uint32_t cluster;
+  uint32_t parent_cluster;
+} fat_file_private_info_t;
 
 int init_fat();
-fs_mountpoint_t fat_partition_to_fs_node(size_t part);
 
 #endif

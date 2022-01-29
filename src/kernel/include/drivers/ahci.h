@@ -1,6 +1,7 @@
 #ifndef __AHCI_H__
 #define __AHCI_H__
 
+#include <device.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <vec.h>
@@ -185,12 +186,8 @@ typedef struct hba_cmd_tbl {
   hba_prdt_entry_t prdt_entry[1];
 } __attribute__((packed)) hba_cmd_tbl_t;
 
-typedef vec_t(hba_port_t *) vec_hba_port_t;
-
-extern vec_hba_port_t sata_ports;
-
-int sata_read(size_t portno, uint64_t start, uint32_t count, uint8_t *buf);
-int sata_write(size_t portno, uint64_t start, uint32_t count, uint8_t *buf);
+uint8_t sata_read(device_t *dev, uint64_t start, uint32_t count, uint8_t *buf);
+uint8_t sata_write(device_t *dev, uint64_t start, uint32_t count, uint8_t *buf);
 int init_sata();
 
 #endif

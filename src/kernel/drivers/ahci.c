@@ -1,5 +1,8 @@
 #include <acpi/acpi.h>
+#include <device.h>
 #include <drivers/ahci.h>
+#include <drivers/mbr.h>
+#include <fs/vfs.h>
 #include <klog.h>
 #include <mm/kheap.h>
 #include <mm/pmm.h>
@@ -38,7 +41,6 @@
 #define ATA_DEV_DRQ 0x08
 
 vec_t(uint64_t) abars = {};
-vec_hba_port_t sata_ports = {};
 
 void ahci_find_abar(uint64_t base_address, uint64_t bus) {
   uint64_t bus_address = base_address + (bus << 20);
@@ -138,7 +140,7 @@ int8_t ahci_find_cmdslot(hba_port_t *port) {
   uint32_t slots = (port->sact | port->ci);
 
   for (int i = 0; i < 32; i++) {
-    if ((slots & 1) == 0)
+    if (!(slots & 1))
       return i;
     slots >>= 1;
   }
@@ -147,11 +149,8 @@ int8_t ahci_find_cmdslot(hba_port_t *port) {
 }
 // End snippets
 
-int sata_read(size_t portno, uint64_t start, uint32_t count, uint8_t *buf) {
-  if (portno > (size_t)sata_ports.length - 1)
-    return 1;
-
-  hba_port_t *port = sata_ports.data[portno];
+uint8_t sata_read(device_t *dev, uint64_t start, uint32_t count, uint8_t *buf) {
+  hba_port_t *port = dev->private_data;
 
   uint32_t startl = (uint32_t)start;
   uint32_t starth = (uint32_t)(start >> 32);
@@ -177,7 +176,7 @@ int sata_read(size_t portno, uint64_t start, uint32_t count, uint8_t *buf) {
   for (i = 0; i < (size_t)cmd_header->prdtl - 1; i++) {
     cmd_table->prdt_entry[i].dba = (uint32_t)(uintptr_t)(buf - PHYS_MEM_OFFSET);
     cmd_table->prdt_entry[i].dbau = 0;
-    cmd_table->prdt_entry[i].dbc = 8 * 1024 - 1; // 8Kb - 1
+    cmd_table->prdt_entry[i].dbc = 8 * 1024 - 1; // 8KiB - 1
     cmd_table->prdt_entry[i].i = 1;
 
     buf += 8 * 1024;
@@ -230,11 +229,9 @@ int sata_read(size_t portno, uint64_t start, uint32_t count, uint8_t *buf) {
   return 0;
 }
 
-int sata_write(size_t portno, uint64_t start, uint32_t count, uint8_t *buf) {
-  if (portno > (size_t)sata_ports.length - 1)
-    return 1;
-
-  hba_port_t *port = sata_ports.data[portno];
+uint8_t sata_write(device_t *dev, uint64_t start, uint32_t count,
+                   uint8_t *buf) {
+  hba_port_t *port = dev->private_data;
 
   uint32_t startl = (uint32_t)start;
   uint32_t starth = (uint32_t)(start >> 32);
@@ -262,7 +259,7 @@ int sata_write(size_t portno, uint64_t start, uint32_t count, uint8_t *buf) {
   for (i = 0; i < (size_t)cmd_header->prdtl - 1; i++) {
     cmd_table->prdt_entry[i].dba = (uint32_t)(uintptr_t)(buf - PHYS_MEM_OFFSET);
     cmd_table->prdt_entry[i].dbau = 0;
-    cmd_table->prdt_entry[i].dbc = 8 * 1024 - 1; // 8Kb - 1
+    cmd_table->prdt_entry[i].dbc = 8 * 1024 - 1; // 8KiB - 1
     cmd_table->prdt_entry[i].i = 1;
 
     buf += 8 * 1024;
@@ -323,7 +320,40 @@ void ahci_init_abars() {
       if (pi & 1)
         if (ahci_check_type(&abar->ports[i]) == AHCI_DEV_SATA) {
           ahci_port_init(&abar->ports[i]);
-          vec_push(&sata_ports, &abar->ports[i]);
+
+          for (size_t p = 0; p < 4; p++) {
+            device_t *dev = kmalloc(sizeof(device_t));
+            *dev = (device_t){
+                .private_data = (void *)&abar->ports[i],
+                .name = "SATA",
+                .type = DEVICE_BLOCK,
+                .fs_type = DEVICE_FS_DISK,
+                .read = sata_read,
+                .write = sata_write,
+            };
+
+            partition_layout_t *part = probe_mbr(dev, p);
+            if (part) {
+              dev->private_data2 = (void *)part;
+              device_add(dev);
+            } else {
+              kfree(dev->private_data);
+              kfree(dev);
+            }
+          }
+
+          device_t *main_dev = kmalloc(sizeof(device_t));
+          *main_dev = (device_t){
+              .private_data = (void *)&abar->ports[i],
+              .private_data2 = NULL,
+              .name = "SATA",
+              .type = DEVICE_BLOCK,
+              .fs_type = DEVICE_FS_DISK,
+              .read = sata_read,
+              .write = sata_write,
+          };
+
+          device_add(main_dev);
         }
     }
   }
@@ -331,7 +361,6 @@ void ahci_init_abars() {
 
 int init_sata() {
   abars.data = kcalloc(sizeof(uint64_t));
-  sata_ports.data = kcalloc(sizeof(hba_port_t));
 
   if (!mcfg)
     return 1;

@@ -12,23 +12,6 @@
 #define SYSCALL_EXEC 5
 #define SYSCALL_SBRK 6
 
-#define SEEK_ZERO 0
-#define SEEK_FORWARDS 1
-#define SEEK_BACKWARDS 2
-
-typedef struct syscall_file {
-  char *path;
-
-  fs_file_t file;
-
-  uint8_t *buffer;
-
-  size_t index;
-
-  size_t size;
-  size_t offset;
-} syscall_file_t;
-
 int init_syscalls();
 
 #endif

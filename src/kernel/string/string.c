@@ -8,20 +8,20 @@ int isdigit(char c) {
   return 0;
 }
 
-void strcpy(char *dest, const char *source) {
+void strcpy(char *dest, char *source) {
   int i = 0;
   while ((dest[i] = source[i]) != '\0')
     i++;
 }
 
-void strcat(char *dest, const char *src) {
+void strcat(char *dest, char *src) {
   while (*dest)
     dest++;
   while ((*dest++ = *src++))
     ;
 }
 
-size_t strlen(const char *s) {
+size_t strlen(char *s) {
   size_t count = 0;
   while (*s != '\0') {
     count++;
@@ -30,13 +30,19 @@ size_t strlen(const char *s) {
   return count;
 }
 
-int strncmp(const char *s1, const char *s2, size_t n) {
+int strncmp(char *s1, char *s2, size_t n) {
   for (size_t i = 0; i < n; i++) {
     if (s1[i] != s2[i])
       return 1;
   }
 
   return 0;
+}
+
+int strcmp(char *s1, char *s2) {
+  while (*s1 && (*s1 == *s2))
+    s1++, s2++;
+  return *(char *)s1 - *(char *)s2;
 }
 
 void memmove(void *dest, void *src, size_t l) {

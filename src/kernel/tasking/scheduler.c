@@ -4,6 +4,7 @@
 #include <drivers/pcspkr.h>
 #include <drivers/pit.h>
 #include <drivers/serial.h>
+#include <fs/vfs.h>
 #include <lock.h>
 #include <mm/kheap.h>
 #include <mm/pmm.h>
@@ -138,16 +139,16 @@ proc_t *sched_create_proc(char *name, int user) {
   if (user) {
     new_proc->heap = pmalloc(INITIAL_HEAP_SIZE / PAGE_SIZE);
     new_proc->heap_size = INITIAL_HEAP_SIZE / PAGE_SIZE;
-    for (size_t i = 0; i < INITIAL_HEAP_SIZE / PAGE_SIZE * PAGE_SIZE; i += PAGE_SIZE)
-      vmm_map_page(new_proc->pagemap, (uintptr_t)new_proc->heap + i,
-                   (uintptr_t)new_proc->heap + i, 0b111);
-    
-    new_proc->heap_capacity = INITIAL_HEAP_SIZE / PAGE_SIZE * PAGE_SIZE; 
+    for (size_t i = 0; i < INITIAL_HEAP_SIZE / PAGE_SIZE * PAGE_SIZE;
+    i += PAGE_SIZE)
+    vmm_map_page(new_proc->pagemap, (uintptr_t)new_proc->heap + i,
+    (uintptr_t)new_proc->heap + i, 0b111);
+
+    new_proc->heap_capacity = INITIAL_HEAP_SIZE / PAGE_SIZE * PAGE_SIZE;
     new_proc->heap_size = 0;
   }
 
-
-  new_proc->fds.data = kmalloc(sizeof(syscall_file_t));
+  new_proc->fds.data = kmalloc(sizeof(fs_file_t));
 
   sched_enqueue_proc(new_proc);
 

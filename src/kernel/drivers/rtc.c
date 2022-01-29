@@ -2,6 +2,7 @@
 #include <asm.h>
 #include <drivers/rtc.h>
 #include <printf.h>
+#include <stdint.h>
 
 #define CMOS_ADDR 0x70
 #define CMOS_DATA 0x71
@@ -26,28 +27,6 @@ uint8_t rtc_get_register(uint8_t reg_num) {
   return val;
 }
 
-time_t rtc_get_time() {
-  while (rtc_is_updating())
-    ;
-
-  return (time_t){
-      .hours = rtc_get_register(4),
-      .minutes = rtc_get_register(2),
-      .seconds = rtc_get_register(0),
-  };
-}
-
-date_t rtc_get_date() {
-  while (rtc_is_updating())
-    ;
-
-  return (date_t){
-      .year = (rtc_get_register(century_register) * 100) + rtc_get_register(9),
-      .month = rtc_get_register(8),
-      .day = rtc_get_register(7),
-  };
-}
-
 datetime_t rtc_get_datetime() {
   while (rtc_is_updating())
     ;
@@ -56,17 +35,35 @@ datetime_t rtc_get_datetime() {
       .hours = rtc_get_register(4),
       .minutes = rtc_get_register(2),
       .seconds = rtc_get_register(0),
-      .year = (rtc_get_register(century_register) * 100) + rtc_get_register(9),
+      .year = (rtc_get_register(century_register) * 100) + rtc_get_register(9) -
+              1900, // POSIX
       .month = rtc_get_register(8),
       .day = rtc_get_register(7),
+
+      .day_of_week = rtc_get_register(6) - 1,
+      .day_of_year = 0, // TODO: Actually impliment this
+      .is_daylight_savings =
+          0, // TODO: Make the poor humans who have DST actually be supported
   };
 }
 
-uint8_t rtc_get_weekday() {
-  while (rtc_is_updating())
-    ;
+static inline uint64_t get_julian_day(uint8_t days, uint8_t months,
+                                      uint16_t years) {
+  return (1461 * (years + 4800 + (months - 14) / 12)) / 4 +
+         (367 * (months - 2 - 12 * ((months - 14) / 12))) / 12 -
+         (3 * ((years + 4900 + (months - 14) / 12) / 100)) / 4 + days - 32075;
+}
 
-  return rtc_get_register(6);
+posix_time_t rtc_mktime(datetime_t dt) {
+  uint64_t jdn_current = get_julian_day(dt.day, dt.month, dt.year);
+  uint64_t jdn_1970 = get_julian_day(1, 1, 1970);
+
+  uint64_t jdn_diff = jdn_current - jdn_1970;
+
+  return (posix_time_t){.seconds = (jdn_diff * (60 * 60 * 24)) +
+                                   dt.hours * 3600 + dt.minutes * 60 +
+                                   dt.seconds,
+                        .nanoseconds = 0};
 }
 
 int init_rtc() {

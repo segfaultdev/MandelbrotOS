@@ -1,247 +1,164 @@
+#include <device.h>
 #include <drivers/ahci.h>
+#include <fs/devfs.h>
 #include <fs/fat32.h>
 #include <fs/vfs.h>
 #include <klog.h>
+#include <mm/kheap.h>
+#include <printf.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
 #include <vec.h>
 
-vec_t(fs_mountpoint_t) vfs_mounts = {0};
+vec_t(vfs_mount_info_t *) vfs_mounts = {0};
+vec_t(fs_ops_t *) registered_fses = {0};
 
-int init_vfs() {
-  int root_disk_found = 0;
-  uint8_t drive_name = 'A';
+vfs_mount_info_t *root_mount;
 
-  for (size_t i = 0; i < (size_t)fat_parts.length; i++) {
-    fs_mountpoint_t node = fat_partition_to_fs_node(i);
-    strcpy(node.type, "FAT32");
-    node.drive_num = drive_name++;
-    node.position_in_list = i;
+static inline int vfs_is_mounted(char *path) {
+  for (size_t i = 0; i < (size_t)vfs_mounts.length; i++)
+    if (!strcmp(vfs_mounts.data[i]->path, path))
+      return 1;
+  return 0;
+}
 
-    vec_push(&vfs_mounts, node);
+void vfs_seek(fs_file_t *file, int64_t count, int mode) {
+  switch (mode) {
+    case SEEK_SET:
+      file->offset = (size_t)count;
+      break;
+    case SEEK_REL:
+      file->offset += count;
+      break;
+  }
+}
 
-    if (!root_disk_found && node.is_root_partition) {
-      root_disk_found = 1;
-      vec_swap(&vfs_mounts, 0, i);
-    }
+vfs_mount_info_t *vfs_find_mount(char *path) {
+  char *path_dup = kcalloc(strlen(path) + 1);
+  strcpy(path_dup, path);
+
+  if (!strcmp(path_dup, "/")) {
+    kfree(path_dup);
+    return root_mount;
   }
 
-  if (!vfs_mounts.length)
+  while (strlen(path_dup) > 1) {
+    for (size_t i = 0; i < (size_t)vfs_mounts.length; i++)
+      if (!strcmp(vfs_mounts.data[i]->path, path_dup)) {
+        kfree(path_dup);
+        return vfs_mounts.data[i];
+      }
+    path_dup[strlen(path_dup) - 1] = 0;
+  }
+
+  kfree(path_dup);
+  return root_mount;
+}
+
+fs_t *vfs_mount_fs(device_t *dev) {
+  for (size_t i = 0; i < (size_t)registered_fses.length; i++)
+    if (registered_fses.data[i]->mount) {
+      fs_t *fs = registered_fses.data[i]->mount(dev);
+      if (fs)
+        return fs;
+    }
+
+  return NULL;
+}
+
+int vfs_mount(char *path, device_t *dev) {
+  if (!root_mount && strcmp(path, "/"))
     return 1;
+  if (vfs_is_mounted(path))
+    return 1;
+
+  fs_t *fs = vfs_mount_fs(dev);
+  if (!fs)
+    return 1;
+
+  vfs_mount_info_t *mi = kmalloc(sizeof(vfs_mount_info_t));
+
+  *mi = (vfs_mount_info_t){
+      .dev = dev,
+      .path = path,
+      .fs = fs,
+  };
+
+  vec_push(&vfs_mounts, mi);
+
+  if (!root_mount)
+    root_mount = mi;
+
+  dev->fs = fs;
 
   return 0;
 }
 
-uint8_t vfs_read(char *path, size_t offset, size_t count, uint8_t *buffer) {
-  if (!buffer)
-    return 1;
-  if (strlen(path) < 2)
-    return 1;
-  if (path[1] != ':')
-    return 1;
-  if (!(path[0] >= 'A' && path[0] <= 'Z')) {
-    path[0] = path[0] - 'a' + 'A';
+void vfs_register_fs(fs_ops_t *ops) { vec_push(&registered_fses, ops); }
 
-    if (!(path[0] >= 'A' && path[0] <= 'Z'))
-      return 1;
-    if (path[0] - 'A' + 1 > vfs_mounts.length)
-      return 1;
-  }
-
-  fs_mountpoint_t root_node = vfs_mounts.data[path[0] - 'A'];
-  if (root_node.read)
-    return root_node.read(root_node.position_in_list, path + 2, offset, buffer,
-                          count);
-
-  return 1;
+int vfs_read(fs_file_t *file, uint8_t *buf, size_t offset, size_t count) {
+  return file->file_ops->read(file, buf, offset, count);
 }
 
-uint8_t vfs_write(char *path, size_t offset, size_t count, uint8_t *buffer) {
-  if (!buffer)
-    return 1;
-  if (strlen(path) < 2)
-    return 1;
-  if (path[1] != ':')
-    return 1;
-  if (!(path[0] >= 'A' && path[0] <= 'Z')) {
-    path[0] = path[0] - 'a' + 'A';
-
-    if (!(path[0] >= 'A' && path[0] <= 'Z'))
-      return 1;
-    if (path[0] - 'A' + 1 > vfs_mounts.length)
-      return 1;
-  }
-
-  fs_mountpoint_t root_node = vfs_mounts.data[path[0] - 'A'];
-  if (root_node.write)
-    return root_node.write(root_node.position_in_list, path + 2, offset, buffer,
-                           count);
-
-  return 1;
+int vfs_write(fs_file_t *file, uint8_t *buf, size_t offset, size_t count) {
+  return file->file_ops->write(file, buf, offset, count);
 }
 
-size_t vfs_sizeof_file(char *path) {
-  if (strlen(path) < 2)
-    return -1;
-  if (path[1] != ':')
-    return -1;
-  if (!(path[0] >= 'A' && path[0] <= 'Z')) {
-    path[0] = path[0] - 'a' + 'A';
+int vfs_rmdir(fs_file_t *file) { return file->file_ops->rmdir(file); }
 
-    if (!(path[0] >= 'A' && path[0] <= 'Z'))
-      return -1;
-    if (path[0] - 'A' + 1 > vfs_mounts.length)
-      return -1;
-  }
+int vfs_delete(fs_file_t *file) { return file->file_ops->delete (file); }
 
-  fs_mountpoint_t root_node = vfs_mounts.data[path[0] - 'A'];
-  if (root_node.sizeof_file)
-    return root_node.sizeof_file(root_node.position_in_list, path + 2);
-
-  return -1;
+int vfs_truncate(fs_file_t *file, size_t size) {
+  return file->file_ops->truncate(file, size);
 }
 
-uint8_t vfs_identify(char *path) {
-  if (strlen(path) < 2)
-    return 1;
-  if (path[1] != ':')
-    return 1;
-  if (!(path[0] >= 'A' && path[0] <= 'Z')) {
-    path[0] = path[0] - 'a' + 'A';
-
-    if (!(path[0] >= 'A' && path[0] <= 'Z'))
-      return 1;
-    if (path[0] - 'A' + 1 > vfs_mounts.length)
-      return 1;
-  }
-
-  fs_mountpoint_t root_node = vfs_mounts.data[path[0] - 'A'];
-  if (root_node.identify)
-    return root_node.identify(root_node.position_in_list, path + 2);
-
-  return 1;
+int vfs_fstat(fs_file_t *file, stat_t *stat) {
+  return file->file_ops->fstat(file, stat);
 }
 
-uint8_t vfs_delete(char *path) {
-  if (strlen(path) < 2)
-    return 1;
-  if (path[1] != ':')
-    return 1;
-  if (!(path[0] >= 'A' && path[0] <= 'Z')) {
-    path[0] = path[0] - 'a' + 'A';
+int vfs_close(fs_file_t *file) { return file->file_ops->close(file); }
 
-    if (!(path[0] >= 'A' && path[0] <= 'Z'))
-      return 1;
-    if (path[0] - 'A' + 1 > vfs_mounts.length)
-      return 1;
-  }
-
-  fs_mountpoint_t root_node = vfs_mounts.data[path[0] - 'A'];
-  if (root_node.delete)
-    return root_node.delete(root_node.position_in_list, path + 2);
-
-  return 1;
+int vfs_readdir(fs_file_t *file, dirent_t *dirent) {
+  return file->file_ops->readdir(file, dirent);
 }
 
-uint8_t vfs_create_file(char *path) {
-  if (strlen(path) < 2)
-    return 1;
-  if (path[1] != ':')
-    return 1;
-  if (!(path[0] >= 'A' && path[0] <= 'Z')) {
-    path[0] = path[0] - 'a' + 'A';
-
-    if (!(path[0] >= 'A' && path[0] <= 'Z'))
-      return 1;
-    if (path[0] - 'A' + 1 > vfs_mounts.length)
-      return 1;
-  }
-
-  fs_mountpoint_t root_node = vfs_mounts.data[path[0] - 'A'];
-  if (root_node.create_file)
-    return root_node.create_file(root_node.position_in_list, path + 2);
-
-  return 1;
+int vfs_ioctl(fs_file_t *file, uint64_t cmd, uint64_t arg) {
+  return file->file_ops->ioctl(file, cmd, arg);
 }
 
-uint8_t vfs_create_dir(char *path) {
-  if (strlen(path) < 2)
-    return 1;
-  if (path[1] != ':')
-    return 1;
-  if (!(path[0] >= 'a' && path[0] <= 'z')) {
-    path[0] = path[0] - 'a' + 'a';
-
-    if (!(path[0] >= 'a' && path[0] <= 'z'))
-      return 1;
-    if (path[0] - 'a' + 1 > vfs_mounts.length)
-      return 1;
-  }
-
-  fs_mountpoint_t root_node = vfs_mounts.data[path[0] - 'a'];
-  if (root_node.mkdir)
-    return root_node.mkdir(root_node.position_in_list, path + 2);
-
-  return 1;
+int vfs_chmod(fs_file_t *file, int mode) {
+  return file->file_ops->chmod(file, mode);
 }
 
-uint8_t vfs_set_flags(char *path, uint32_t flags) {
-  if (strlen(path) < 2)
-    return 1;
-  if (path[1] != ':')
-    return 1;
-  if (!(path[0] >= 'a' && path[0] <= 'z')) {
-    path[0] = path[0] - 'a' + 'a';
-
-    if (!(path[0] >= 'a' && path[0] <= 'z'))
-      return 1;
-    if (path[0] - 'a' + 1 > vfs_mounts.length)
-      return 1;
-  }
-
-  fs_mountpoint_t root_node = vfs_mounts.data[path[0] - 'a'];
-  if (root_node.set_flags)
-    return root_node.set_flags(root_node.position_in_list, path + 2, flags);
-
-  return 1;
+int vfs_chown(fs_file_t *file, int uid, int gid) {
+  return file->file_ops->chown(file, uid, gid);
 }
 
-vec_fs_file_t vfs_list_dir(char *path) {
-  if (strlen(path) < 2)
-    return (vec_fs_file_t){0};
-  if (path[1] != ':')
-    return (vec_fs_file_t){0};
-  if (!(path[0] >= 'A' && path[0] <= 'Z')) {
-    path[0] = path[0] - 'a' + 'A';
-
-    if (!(path[0] >= 'A' && path[0] <= 'Z'))
-      return (vec_fs_file_t){0};
-    if (path[0] - 'A' + 1 > vfs_mounts.length)
-      return (vec_fs_file_t){0};
-  }
-
-  fs_mountpoint_t root_node = vfs_mounts.data[path[0] - 'A'];
-  if (root_node.mkdir)
-    return root_node.list_directory(root_node.position_in_list, path + 2);
-
-  return (vec_fs_file_t){0};
+fs_file_t *vfs_mkdir(char *path, int mode) {
+  vfs_mount_info_t *mi = vfs_find_mount(path);
+  char *str =
+      (strlen(path) == strlen(mi->path)) ? "/" : path + strlen(mi->path) - 1;
+  return mi->fs->ops->mkdir(mi->fs, str, mode);
 }
 
-fs_file_t vfs_get_info(char *path) {
-  if (strlen(path) < 2)
-    return (fs_file_t){0};
-  if (path[1] != ':')
-    return (fs_file_t){0};
-  if (!(path[0] >= 'A' && path[0] <= 'Z')) {
-    path[0] = path[0] - 'a' + 'A';
+fs_file_t *vfs_create(char *path) {
+  vfs_mount_info_t *mi = vfs_find_mount(path);
+  char *str =
+      (strlen(path) == strlen(mi->path)) ? "/" : path + strlen(mi->path) - 1;
+  return mi->fs->ops->create(mi->fs, str);
+}
 
-    if (!(path[0] >= 'A' && path[0] <= 'Z'))
-      return (fs_file_t){0};
-    if (path[0] - 'A' + 1 > vfs_mounts.length)
-      return (fs_file_t){0};
-  }
+fs_file_t *vfs_open(char *name) {
+  vfs_mount_info_t *mi = vfs_find_mount(name);
+  char *str =
+      (strlen(name) == strlen(mi->path)) ? "/" : name + strlen(mi->path) - 1;
+  return mi->fs->ops->open(mi->fs, str);
+}
 
-  fs_mountpoint_t root_node = vfs_mounts.data[path[0] - 'A'];
-  if (root_node.info)
-    return root_node.info(root_node.position_in_list, path + 2);
+int init_vfs() {
+  vfs_mounts.data = kmalloc(sizeof(vfs_mount_info_t));
+  registered_fses.data = kmalloc(sizeof(fs_ops_t));
 
-  return (fs_file_t){0};
+  return 0;
 }

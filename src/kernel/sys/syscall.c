@@ -33,94 +33,95 @@ int init_syscalls() {
 }
 
 size_t syscall_open(char *path) {
-  uintptr_t kern_path_addr =
-      vmm_get_kernel_address(CURRENT_PAGEMAP, (uintptr_t)path);
+  /* uintptr_t kern_path_addr = */
+  /* vmm_get_kernel_address(CURRENT_PAGEMAP, (uintptr_t)path); */
 
-  fs_file_t file = vfs_get_info((char *)kern_path_addr);
-  if (!file.is_valid)
-    return -1;
+  /* fs_file_t file = vfs_get_info((char *)kern_path_addr); */
+  /* if (!file.is_valid) */
+  /* return -1; */
 
-  syscall_file_t sfile = (syscall_file_t){
-      .size = file.file_size,
-      .offset = 0,
-      .buffer = kmalloc(file.file_size),
-      .file = file,
-      .path = kmalloc(strlen(path)),
-      .index = CURRENT_PROC->fds.length,
-  };
-  strcpy(sfile.path, path);
+  /* syscall_file_t sfile = (syscall_file_t){ */
+  /* .size = file.file_size, */
+  /* .offset = 0, */
+  /* .buffer = kmalloc(file.file_size), */
+  /* .file = file, */
+  /* .path = kmalloc(strlen(path)), */
+  /* .index = CURRENT_PROC->fds.length, */
+  /* }; */
+  /* strcpy(sfile.path, path); */
 
-  vfs_read(path, 0, file.file_size, sfile.buffer);
+  /* vfs_read(path, 0, file.file_size, sfile.buffer); */
 
-  vec_push(&CURRENT_PROC->fds, sfile);
+  /* vec_push(&CURRENT_PROC->fds, sfile); */
 
-  return (size_t)CURRENT_PROC->fds.length - 1;
+  /* return (size_t)CURRENT_PROC->fds.length - 1; */
+  return 0;
 }
 
 void syscall_close(size_t id) {
-  if (id > (size_t)CURRENT_PROC->fds.length - 1)
-    return;
+  /* if (id > (size_t)CURRENT_PROC->fds.length - 1) */
+  /* return; */
 
-  syscall_file_t *file = &CURRENT_PROC->fds.data[id];
+  /* syscall_file_t *file = &CURRENT_PROC->fds.data[id]; */
 
-  vfs_write(file->path, 0, file->size, file->buffer);
+  /* vfs_write(file->path, 0, file->size, file->buffer); */
 
-  kfree(file->buffer);
-  kfree(file->path);
+  /* kfree(file->buffer); */
+  /* kfree(file->path); */
 }
 
 void syscall_read(size_t id, uint8_t *buffer, size_t size) {
-  if (id > (size_t)CURRENT_PROC->fds.length - 1)
-    return;
+  /* if (id > (size_t)CURRENT_PROC->fds.length - 1) */
+  /* return; */
 
-  syscall_file_t *file = &CURRENT_PROC->fds.data[id];
+  /* syscall_file_t *file = &CURRENT_PROC->fds.data[id]; */
 
-  if (size > file->size - file->offset)
-    size = file->size - file->offset;
+  /* if (size > file->size - file->offset) */
+  /* size = file->size - file->offset; */
 
-  vmm_memcpy(CURRENT_PAGEMAP, (uintptr_t)buffer, &kernel_pagemap,
-             (uintptr_t)(file->buffer + file->offset), file->size);
+  /* vmm_memcpy(CURRENT_PAGEMAP, (uintptr_t)buffer, &kernel_pagemap, */
+  /* (uintptr_t)(file->buffer + file->offset), file->size); */
 
-  file->offset += size;
+  /* file->offset += size; */
 }
 
 void syscall_write(size_t id, uint8_t *buffer, size_t size) {
-  if (id > (size_t)CURRENT_PROC->fds.length - 1)
-    return;
+  /* if (id > (size_t)CURRENT_PROC->fds.length - 1) */
+  /* return; */
 
-  syscall_file_t *file = &CURRENT_PROC->fds.data[id];
+  /* syscall_file_t *file = &CURRENT_PROC->fds.data[id]; */
 
-  if (size > file->size - file->offset) {
-    file->buffer = krealloc(file->buffer, size + file->offset);
-    file->size = size + file->offset;
-  }
+  /* if (size > file->size - file->offset) { */
+  /* file->buffer = krealloc(file->buffer, size + file->offset); */
+  /* file->size = size + file->offset; */
+  /* } */
 
-  vmm_memcpy(&kernel_pagemap, (uintptr_t)(file->buffer + file->offset),
-             CURRENT_PAGEMAP, (uintptr_t)buffer, size);
+  /* vmm_memcpy(&kernel_pagemap, (uintptr_t)(file->buffer + file->offset), */
+  /* CURRENT_PAGEMAP, (uintptr_t)buffer, size); */
 
-  file->offset += size;
+  /* file->offset += size; */
 }
 
 void syscall_seek(size_t id, size_t offset, int mode) {
-  if (id > (size_t)CURRENT_PROC->fds.length - 1)
-    return;
+  /* if (id > (size_t)CURRENT_PROC->fds.length - 1) */
+  /* return; */
 
-  syscall_file_t *file = &CURRENT_PROC->fds.data[id];
+  /* syscall_file_t *file = &CURRENT_PROC->fds.data[id]; */
 
-  switch (mode) {
-    case SEEK_ZERO:
-      file->offset = offset;
-      break;
-    case SEEK_FORWARDS:
-      file->offset += offset;
-      break;
-    case SEEK_BACKWARDS:
-      if (offset > file->offset)
-        file->offset = 0;
-      else
-        file->offset -= offset;
-      break;
-  }
+  /* switch (mode) { */
+  /* case SEEK_ZERO: */
+  /* file->offset = offset; */
+  /* break; */
+  /* case SEEK_FORWARDS: */
+  /* file->offset += offset; */
+  /* break; */
+  /* case SEEK_BACKWARDS: */
+  /* if (offset > file->offset) */
+  /* file->offset = 0; */
+  /* else */
+  /* file->offset -= offset; */
+  /* break; */
+  /* } */
 }
 
 void syscall_exec(char *name, char *path, uint64_t arg1, uint64_t arg2,
@@ -146,17 +147,18 @@ uint64_t syscall_sbrk(size_t size) {
     void *new_mem = pmalloc(size / PAGE_SIZE + PAGE_SIZE);
 
     for (uintptr_t i = 0; i < size / PAGE_SIZE + PAGE_SIZE; i += PAGE_SIZE)
-      vmm_map_page(CURRENT_PAGEMAP, (uintptr_t)new_mem + PHYS_MEM_OFFSET + i, (uintptr_t)CURRENT_PROC->heap + CURRENT_PROC->heap_capacity + i, 0b111);
+      vmm_map_page(CURRENT_PAGEMAP, (uintptr_t)new_mem + PHYS_MEM_OFFSET + i,
+                   (uintptr_t)CURRENT_PROC->heap + CURRENT_PROC->heap_capacity +
+                       i,
+                   0b111);
 
     CURRENT_PROC->heap_capacity += (size / PAGE_SIZE + PAGE_SIZE);
-    CURRENT_PROC->heap_size += size;
-
-    return (uintptr_t)CURRENT_PROC->heap + CURRENT_PROC->heap_size;
   }
-  
+
+  uint64_t old_heap_size = CURRENT_PROC->heap_size;
   CURRENT_PROC->heap_size += size;
 
-  return (uintptr_t)CURRENT_PROC->heap + CURRENT_PROC->heap_size;
+  return (uintptr_t)CURRENT_PROC->heap + old_heap_size;
 }
 
 uint64_t c_syscall_handler(uint64_t rsp) {
@@ -166,27 +168,31 @@ uint64_t c_syscall_handler(uint64_t rsp) {
 
   uint64_t ret = registers->rax;
 
-  switch (registers->rax) {
+  switch (registers->rdi) {
     case SYSCALL_OPEN:
-      ret = syscall_open((char *)registers->rdi);
+      ret = syscall_open((char *)registers->rsi);
       break;
     case SYSCALL_CLOSE:
-      syscall_close((size_t)registers->rdi);
+      syscall_close((size_t)registers->rsi);
+      break;
     case SYSCALL_READ:
-      syscall_read(registers->rdi, (uint8_t *)registers->rsi, registers->rdx);
+      syscall_read(registers->rsi, (uint8_t *)registers->rdx, registers->rcx);
       break;
     case SYSCALL_WRITE:
-      syscall_write(registers->rdi, (uint8_t *)registers->rsi, registers->rdx);
+      syscall_write(registers->rsi, (uint8_t *)registers->rdx, registers->rcx);
       break;
     case SYSCALL_SEEK:
-      syscall_seek(registers->rdi, registers->rsi, (int)registers->rdx);
+      syscall_seek(registers->rsi, registers->rdx, (int)registers->rcx);
       break;
     case SYSCALL_EXEC:
-      syscall_exec((char *)registers->rdi, (char *)registers->rsi,
-                   registers->rdx, registers->rcx, registers->r8);
+      syscall_exec((char *)registers->rsi, (char *)registers->rdx,
+                   registers->rcx, registers->r8, registers->r9);
       break;
     case SYSCALL_SBRK:
-      syscall_sbrk(registers->rdi);
+      ret = syscall_sbrk(registers->rsi);
+      break;
+    case 10:
+      putchar((char)registers->rsi);
       break;
     default:
       break;

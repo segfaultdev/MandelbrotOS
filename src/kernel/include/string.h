@@ -4,10 +4,11 @@
 #include <stddef.h>
 
 int isdigit(char c);
-void strcpy(char *dest, const char *source);
-void strcat(char *dest, const char *src);
-size_t strlen(const char *s);
-int strncmp(const char *s1, const char *s2, size_t n);
+void strcpy(char *dest, char *source);
+void strcat(char *dest, char *src);
+size_t strlen(char *s);
+int strncmp(char *s1, char *s2, size_t n);
+int strcmp(char *s1, char *s2);
 void memmove(void *dest, void *src, size_t n);
 char *strchr(char *s, int c);
 char *strrchr(char *s, int c);

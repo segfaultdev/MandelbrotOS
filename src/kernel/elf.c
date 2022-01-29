@@ -5,6 +5,7 @@
 #include <mm/pmm.h>
 #include <mm/vmm.h>
 #include <printf.h>
+#include <stddef.h>
 #include <string.h>
 #include <tasking/scheduler.h>
 
@@ -26,9 +27,9 @@ static inline elf_sect_header_t *elf_sheader(elf_header_t *hdr) {
 
 uint8_t elf_run_binary(char *name, char *path, proc_t *proc, size_t time_slice,
                        uint64_t arg1, uint64_t arg2, uint64_t arg3) {
-  fs_file_t file = vfs_get_info(path);
-  uint8_t *buffer = kmalloc(file.file_size);
-  vfs_read(path, 0, file.file_size, buffer);
+  fs_file_t *file = vfs_open(path);
+  uint8_t *buffer = kmalloc(file->length);
+  vfs_read(file, buffer, 0, file->length);
 
   elf_header_t *header = (elf_header_t *)buffer;
   if (header->type != ELF_EXECUTABLE)
