@@ -9,12 +9,12 @@
 #include <string.h>
 #include <vec.h>
 
-rsdp_t *rsdp;
-rsdt_t *rsdt;
-xsdt_t *xsdt;
-mcfg_t *mcfg;
-madt_t *madt;
-fadt_t *fadt;
+rsdp_t *rsdp = NULL;
+rsdt_t *rsdt = NULL;
+xsdt_t *xsdt = NULL;
+mcfg_t *mcfg = NULL;
+madt_t *madt = NULL;
+fadt_t *fadt = NULL;
 
 vec_madt_lapic madt_lapics;
 vec_madt_ioapic madt_ioapics;
@@ -35,7 +35,7 @@ bool acpi_do_checksum(sdt_t *th) {
 void *acpi_get_table(char *signature, int index) {
   size_t entries;
 
-  if (rsdp->revision <= 2)
+  if (!xsdt)
     entries = (rsdt->h.length - sizeof(rsdt->h)) / 4;
   else
     entries = (xsdt->h.length - sizeof(xsdt->h)) / 8;
@@ -44,7 +44,7 @@ void *acpi_get_table(char *signature, int index) {
   sdt_t *h;
 
   for (size_t t = 0; t < entries; t++) {
-    if (rsdp->revision <= 2)
+    if (!xsdt)
       h = (sdt_t *)(uint64_t)(rsdt->sptr[t] + PHYS_MEM_OFFSET);
     else
       h = (sdt_t *)(uint64_t)(xsdt->sptr[t] + PHYS_MEM_OFFSET);
@@ -100,15 +100,17 @@ int init_acpi(struct stivale2_struct_tag_rsdp *rsdp_info) {
   rsdp = (rsdp_t *)rsdp_info->rsdp;
 
   if (!rsdp->rsdt_address) {
-    klog(1, "Failed to get MADT. Halting!");
+    klog(1, "Failed to get RSDT. Halting!");
     while (1)
       ;
   }
 
   rsdt = (rsdt_t *)(rsdp->rsdt_address + PHYS_MEM_OFFSET);
 
-  if (rsdp->revision >= 2)
+  if (rsdp->revision > 0) {
     xsdt = (xsdt_t *)(rsdp->xsdt_address + PHYS_MEM_OFFSET);
+    klog(3, "ACPI is revision 2!\r\n");
+  }
 
   fadt = acpi_get_table("FACP", 0);
 

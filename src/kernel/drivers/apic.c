@@ -24,17 +24,31 @@
 #define IOAPIC_REG_IOWIN 0x10
 #define IOAPIC_REG_VER 1
 
-void disable_pic() {
-  outb(0xa1, 0xff);
-  outb(0x21, 0xff);
+static inline uintptr_t lapic_get_address() {
+  return (uintptr_t)((rdmsr(0x1b) & 0xfffff000) + PHYS_MEM_OFFSET);
 }
 
 static inline uint32_t lapic_read(size_t reg) {
-  return *((uint32_t *)(((rdmsr(0x1b) & 0xfffff000) + PHYS_MEM_OFFSET) + reg));
+  return *((volatile uint32_t *)(lapic_get_address() + reg));
 }
 
 static inline void lapic_write(size_t reg, uint32_t data) {
-  *((uint32_t *)(((rdmsr(0x1b) & 0xfffff000) + PHYS_MEM_OFFSET) + reg)) = data;
+  *((volatile uint32_t *)(lapic_get_address() + reg)) = data;
+}
+
+static inline uint32_t ioapic_read(uintptr_t addr, size_t reg) {
+  *((volatile uint32_t *)(addr + IOAPIC_REG_IOREGSEL)) = reg;
+  return *((volatile uint32_t *)(addr + IOAPIC_REG_IOWIN));
+}
+
+static inline void ioapic_write(uintptr_t addr, size_t reg, uint32_t data) {
+  *((volatile uint32_t *)(addr + IOAPIC_REG_IOREGSEL)) = reg;
+  *((volatile uint32_t *)(addr + IOAPIC_REG_IOWIN)) = data;
+}
+
+void disable_pic() {
+  outb(0xa1, 0xff);
+  outb(0x21, 0xff);
 }
 
 void lapic_enable(uint8_t vect) {
@@ -43,10 +57,6 @@ void lapic_enable(uint8_t vect) {
 }
 
 uint8_t lapic_get_id() { return (uint8_t)(lapic_read(LAPIC_APIC_ID) >> 24); }
-
-uintptr_t lapic_get_adress() {
-  return (uintptr_t)((rdmsr(0x1b) & 0xfffff000) + PHYS_MEM_OFFSET);
-}
 
 void lapic_eoi() { lapic_write(LAPIC_REG_EOI, 0); }
 
@@ -91,16 +101,6 @@ void lapic_timer_oneshot(uint8_t intr, uint32_t us) {
   lapic_write(LAPIC_REG_TIMER, intr);
   lapic_write(LAPIC_REG_TIMER_DIV, 0);
   lapic_write(LAPIC_REG_TIMER_INITCNT, (uint64_t)ticks);
-}
-
-static inline uint32_t ioapic_read(uintptr_t addr, size_t reg) {
-  *((volatile uint32_t *)(addr + IOAPIC_REG_IOREGSEL)) = reg;
-  return *((volatile uint32_t *)(addr + IOAPIC_REG_IOWIN));
-}
-
-static inline void ioapic_write(uintptr_t addr, size_t reg, uint32_t data) {
-  *((volatile uint32_t *)(addr + IOAPIC_REG_IOREGSEL)) = reg;
-  *((volatile uint32_t *)(addr + IOAPIC_REG_IOWIN)) = data;
 }
 
 uint32_t ioapic_get_gsi_count(uintptr_t addr) {

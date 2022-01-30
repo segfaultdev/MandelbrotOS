@@ -1,6 +1,6 @@
 #include <pci/pci.h>
 
-const char *pci_device_classes[] = {
+char *pci_device_classes[] = {
     "Unclassified",           "Mass Storage Controller",
     "Network Controller",     "Display Controller",
     "Multimedia Controller",  "Memory Controller",
@@ -12,7 +12,7 @@ const char *pci_device_classes[] = {
     "Encryption Controller",  "Signal Processing Controller",
     "Processing Accelerator", "Non Essential Instrumentation"};
 
-const char *pci_get_subclass_name(uint8_t class, uint8_t subclass) {
+char *pci_get_subclass_name(uint8_t class, uint8_t subclass) {
   switch (class) {
     case 0:
       return "Unknown";
@@ -259,7 +259,7 @@ const char *pci_get_subclass_name(uint8_t class, uint8_t subclass) {
   }
 }
 
-const char *pci_get_vendor_name(uint16_t vendor_id) {
+char *pci_get_vendor_name(uint16_t vendor_id) {
   switch (vendor_id) {
     case 0x1002:
       return "Advanced Micro Devices (AMD) inc.";
@@ -290,7 +290,7 @@ const char *pci_get_vendor_name(uint16_t vendor_id) {
   }
 }
 
-const char *pci_get_device_name(uint16_t vendor_id, uint16_t device_id) {
+char *pci_get_device_name(uint16_t vendor_id, uint16_t device_id) {
   switch (vendor_id) {
 
     case 0x8086:

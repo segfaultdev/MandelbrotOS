@@ -65,11 +65,11 @@ void k_thread() {
   /* char *str = "Hello from FAT32!"; */
   /* vfs_write(file, (uint8_t *)str, 0, strlen(str)); */
 
-  proc_t *user_proc = sched_create_proc("u_proc", 1);
-  elf_run_binary(
-      "julia", "/prog/julia", user_proc, 5000,
-      (uint64_t)vmm_virt_to_phys(&kernel_pagemap, (uintptr_t)framebuffer),
-      (uint64_t)fb_width, (uint64_t)fb_height);
+  /* proc_t *user_proc = sched_create_proc("u_proc", 1); */
+  /* elf_run_binary( */
+  /* "julia", "/prog/julia", user_proc, 5000, */
+  /* (uint64_t)vmm_virt_to_phys(&kernel_pagemap, (uintptr_t)framebuffer), */
+  /* (uint64_t)fb_width, (uint64_t)fb_height); */
 
   while (1)
     ;
@@ -97,7 +97,7 @@ void kernel_main(struct stivale2_struct *bootloader_info) {
   init_vmm();
 
   init_idt();
-  /* init_syscalls(); */
+  init_syscalls();
   init_isr();
   init_irq();
 

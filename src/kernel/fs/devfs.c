@@ -8,6 +8,4 @@
 
 // To do
 
-int init_devfs() {
-  return 0;
-}
+int init_devfs() { return 0; }

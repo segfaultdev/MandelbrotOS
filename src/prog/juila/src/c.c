@@ -104,11 +104,11 @@ void main(uint64_t arg1, uint64_t arg2, uint64_t arg3) {
 
   // 4 really cool alorithms to choose from
 
-  double a = 0;
-  while (1) {
-    draw(0.7885 * cos(a), 0.7885 * sin(a));
-    a += 0.005;
-  }
+  /* double a = 0; */
+  /* while (1) { */
+  /* draw(0.7885 * cos(a), 0.7885 * sin(a)); */
+  /* a += 0.005; */
+  /* } */
 
   /* double a = 0; */
   /* while (1) { */
@@ -116,11 +116,11 @@ void main(uint64_t arg1, uint64_t arg2, uint64_t arg3) {
   /* a += 0.005; */
   /* } */
 
-  /* double a = 0; */
-  /* while (1) { */
-  /* draw(tan(a), tan(sin(a * 10) * 1)); */
-  /* a += 0.005; */
-  /* } */
+  double a = 0;
+  while (1) {
+    draw(tan(a), tan(sin(a * 10) * 1));
+    a += 0.0005;
+  }
 
   /* double a = 0; */
   /* while (1) { */

@@ -12,8 +12,6 @@
 #include <string.h>
 #include <vec.h>
 
-#define AHCI_BAR5_OFFSET 0x24
-
 #define SATA_SIG_ATA 0x00000101
 #define SATA_SIG_ATAPI 0xEB140101
 #define SATA_SIG_SEMB 0xC33C0101
@@ -41,36 +39,6 @@
 #define ATA_DEV_DRQ 0x08
 
 vec_t(uint64_t) abars = {};
-
-void ahci_find_abar(uint64_t base_address, uint64_t bus) {
-  uint64_t bus_address = base_address + (bus << 20);
-  pci_device_t *pci_bus = (pci_device_t *)bus_address;
-
-  if (!pci_bus->device_id || pci_bus->device_id == 0xFFFF)
-    return;
-
-  for (uint8_t device = 0; device < 32; device++) {
-    uint64_t device_address = bus_address + (device << 15);
-    pci_device_t *pci_device = (pci_device_t *)device_address;
-
-    if (!pci_device->device_id || pci_device->device_id == 0xFFFF ||
-        pci_device->header_type & 0b1111111)
-      continue;
-
-    uint8_t functions = pci_device->header_type & (1 << 7) ? 8 : 1;
-
-    for (uint8_t function = 0; function < functions; function++) {
-      uint64_t function_address = device_address + (function << 12);
-      pci_device_t *pci_fn = (pci_device_t *)function_address;
-
-      if (!pci_fn->device_id || pci_fn->device_id == 0xFFFF)
-        continue;
-      if (pci_fn->class == 1 && pci_fn->subclass == 6)
-        vec_push(&abars, pci_cfg_read_dword(0, bus, device, function,
-                                            AHCI_BAR5_OFFSET));
-    }
-  }
-}
 
 // Thanks to OSDEV.org for these 5 snippets
 static inline uint8_t ahci_check_type(hba_port_t *port) {
@@ -362,13 +330,9 @@ void ahci_init_abars() {
 int init_sata() {
   abars.data = kcalloc(sizeof(uint64_t));
 
-  if (!mcfg)
-    return 1;
-
-  for (size_t i = 0;
-       i < (mcfg->h.length - sizeof(mcfg_t)) / sizeof(mcfg_entry_t); i++)
-    for (size_t bus = mcfg->entries[i].sbus; bus < mcfg->entries[i].ebus; bus++)
-      ahci_find_abar(mcfg->entries[i].base_address + PHYS_MEM_OFFSET, bus);
+  for (size_t i = 0; i < (size_t)pci_devices.length; i++)
+    if (pci_devices.data[i]->header.class == 1 && pci_devices.data[i]->header.subclass == 6)
+      vec_push(&abars, pci_get_bar(pci_devices.data[i], 5).base);
 
   if (!abars.length)
     return 1;

@@ -70,15 +70,15 @@ typedef struct madt_iso {
   madt_header_t header;
   uint8_t bus_source;
   uint8_t irq_source;
-  uint16_t flags;
   uint32_t gsi;
+  uint16_t flags;
 } __attribute__((packed)) madt_iso_t;
 
 typedef struct madt_nmi {
   madt_header_t header;
   uint8_t processor;
-  uint8_t lint;
   uint16_t flags;
+  uint8_t lint;
 } __attribute__((packed)) madt_nmi_t;
 
 typedef struct mcfg_entry {
