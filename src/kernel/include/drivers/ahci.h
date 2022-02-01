@@ -2,6 +2,7 @@
 #define __AHCI_H__
 
 #include <device.h>
+#include <drivers/mbr.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <vec.h>
@@ -185,6 +186,11 @@ typedef struct hba_cmd_tbl {
   uint8_t rsv[48];
   hba_prdt_entry_t prdt_entry[1];
 } __attribute__((packed)) hba_cmd_tbl_t;
+
+typedef struct ahci_private_data {
+  hba_port_t *port;
+  partition_layout_t *part;
+} ahci_private_data_t;
 
 uint8_t sata_read(device_t *dev, uint64_t start, uint32_t count, uint8_t *buf);
 uint8_t sata_write(device_t *dev, uint64_t start, uint32_t count, uint8_t *buf);

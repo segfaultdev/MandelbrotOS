@@ -111,11 +111,6 @@ typedef struct long_filename {
 
 typedef struct fat_fs_private_info {
   bpb_t boot;
-
-  uint32_t sector_start;
-  uint32_t sector_length;
-
-  uint8_t partiton;
 } fat_fs_private_info_t;
 
 typedef struct fat_file_private_info {

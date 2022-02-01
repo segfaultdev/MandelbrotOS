@@ -19,7 +19,6 @@ typedef struct device {
   uint32_t fs_type;
   struct fs *fs;
   void *private_data;
-  void *private_data2;
   uint8_t (*read)(struct device *dev, uint64_t start, uint32_t count,
                   uint8_t *buf);
   uint8_t (*write)(struct device *dev, uint64_t start, uint32_t count,

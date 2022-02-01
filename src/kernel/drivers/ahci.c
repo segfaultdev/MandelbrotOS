@@ -118,7 +118,10 @@ int8_t ahci_find_cmdslot(hba_port_t *port) {
 // End snippets
 
 uint8_t sata_read(device_t *dev, uint64_t start, uint32_t count, uint8_t *buf) {
-  hba_port_t *port = dev->private_data;
+  hba_port_t *port = ((ahci_private_data_t *)dev->private_data)->port;
+
+  if (((ahci_private_data_t *)dev->private_data)->part)
+    start += ((ahci_private_data_t *)dev->private_data)->part->sector_start;
 
   uint32_t startl = (uint32_t)start;
   uint32_t starth = (uint32_t)(start >> 32);
@@ -199,8 +202,11 @@ uint8_t sata_read(device_t *dev, uint64_t start, uint32_t count, uint8_t *buf) {
 
 uint8_t sata_write(device_t *dev, uint64_t start, uint32_t count,
                    uint8_t *buf) {
-  hba_port_t *port = dev->private_data;
+  hba_port_t *port = ((ahci_private_data_t *)dev->private_data)->port;
 
+  if (((ahci_private_data_t *)dev->private_data)->part)
+    start += ((ahci_private_data_t *)dev->private_data)->part->sector_start;
+  
   uint32_t startl = (uint32_t)start;
   uint32_t starth = (uint32_t)(start >> 32);
 
@@ -292,7 +298,7 @@ void ahci_init_abars() {
           for (size_t p = 0; p < 4; p++) {
             device_t *dev = kmalloc(sizeof(device_t));
             *dev = (device_t){
-                .private_data = (void *)&abar->ports[i],
+                .private_data = kmalloc(sizeof(ahci_private_data_t)),
                 .name = "SATA",
                 .type = DEVICE_BLOCK,
                 .fs_type = DEVICE_FS_DISK,
@@ -300,9 +306,15 @@ void ahci_init_abars() {
                 .write = sata_write,
             };
 
+            *((ahci_private_data_t *)dev->private_data) = (ahci_private_data_t) {
+              .port = &abar->ports[i],
+              .part = NULL,
+            };
+
             partition_layout_t *part = probe_mbr(dev, p);
+            
             if (part) {
-              dev->private_data2 = (void *)part;
+              ((ahci_private_data_t *)dev->private_data)->part = part;
               device_add(dev);
             } else {
               kfree(dev->private_data);
@@ -312,13 +324,17 @@ void ahci_init_abars() {
 
           device_t *main_dev = kmalloc(sizeof(device_t));
           *main_dev = (device_t){
-              .private_data = (void *)&abar->ports[i],
-              .private_data2 = NULL,
+              .private_data = kmalloc(sizeof(ahci_private_data_t)),
               .name = "SATA",
               .type = DEVICE_BLOCK,
               .fs_type = DEVICE_FS_DISK,
               .read = sata_read,
               .write = sata_write,
+          };
+
+          *((ahci_private_data_t *)main_dev->private_data) = (ahci_private_data_t) {
+            .port = &abar->ports[i],
+            .part = NULL,
           };
 
           device_add(main_dev);

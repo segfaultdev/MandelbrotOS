@@ -30,7 +30,6 @@ uint32_t fat_get_next_cluster(device_t *dev, uint32_t cluster) {
   uint8_t buf[512];
   uint64_t fat_sector =
       ((fat_fs_private_info_t *)dev->fs->private_data)->boot.reserved_sectors +
-      ((fat_fs_private_info_t *)dev->fs->private_data)->sector_start +
       ((cluster * 4) / 512);
 
   dev->read(dev, fat_sector, 1, buf);
@@ -40,8 +39,7 @@ uint32_t fat_get_next_cluster(device_t *dev, uint32_t cluster) {
 
 uint32_t fat_read_cluster(device_t *dev, uint8_t *buffer, uint32_t cluster) {
   dev->read(dev,
-            fat_cluster_to_sector(dev, cluster) +
-                ((fat_fs_private_info_t *)dev->fs->private_data)->sector_start,
+            fat_cluster_to_sector(dev, cluster),
             ((fat_fs_private_info_t *)dev->fs->private_data)->boot.cluster_size,
             buffer);
 
@@ -75,7 +73,6 @@ void fat_change_fat_value(device_t *dev, uint32_t current_cluster,
                           uint32_t next_cluster) {
   uint8_t buffer[512];
   uint64_t sector =
-      ((fat_fs_private_info_t *)dev->fs->private_data)->sector_start +
       ((fat_fs_private_info_t *)dev->fs->private_data)->boot.reserved_sectors +
       ((current_cluster * 4) / 512);
 
@@ -93,7 +90,6 @@ uint32_t fat_find_free_cluster(device_t *dev) {
        i < ((fat_fs_private_info_t *)dev->fs->private_data)->boot.table_size;
        i++) {
     uint64_t sector =
-        ((fat_fs_private_info_t *)dev->fs->private_data)->sector_start +
         ((fat_fs_private_info_t *)dev->fs->private_data)
             ->boot.reserved_sectors +
         i;
@@ -199,8 +195,7 @@ uint32_t fat_get_free_dir_entry_chain(device_t *dev, uint32_t directory,
 uint32_t fat_write_cluster(device_t *dev, uint8_t *buffer, uint32_t cluster) {
   dev->write(
       dev,
-      fat_cluster_to_sector(dev, cluster) +
-          ((fat_fs_private_info_t *)dev->fs->private_data)->sector_start,
+      fat_cluster_to_sector(dev, cluster),
       ((fat_fs_private_info_t *)dev->fs->private_data)->boot.cluster_size,
       buffer);
 
@@ -1275,7 +1270,7 @@ fs_ops_t fat_fs_ops;
 
 fs_t *fat_mount(device_t *dev) {
   bpb_t bios_block;
-  dev->read(dev, ((partition_layout_t *)dev->private_data2)->sector_start, 1,
+  dev->read(dev, 0, 1,
             (uint8_t *)&bios_block);
 
   if (bios_block.signature != 0x28 && bios_block.signature != 0x29)
@@ -1288,10 +1283,6 @@ fs_t *fat_mount(device_t *dev) {
 
   *((fat_fs_private_info_t *)fs->private_data) = (fat_fs_private_info_t){
       .boot = bios_block,
-      .partiton = ((partition_layout_t *)dev->private_data2)->partition_number,
-      .sector_length =
-          ((partition_layout_t *)dev->private_data2)->length_in_sectors,
-      .sector_start = ((partition_layout_t *)dev->private_data2)->sector_start,
   };
 
   return fs;

@@ -1,7 +1,7 @@
 #ifndef __MBR_H__
 #define __MBR_H__
 
-#include <drivers/ahci.h>
+#include <device.h>
 #include <stdint.h>
 #include <vec.h>
 
