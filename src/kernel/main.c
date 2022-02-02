@@ -60,14 +60,14 @@ void k_thread() {
 
   vfs_mount("/", device_get(0));
 
-  vfs_mkdir("/test_dir", 0);
-  fs_file_t *file = vfs_create("/test_dir/hello.txt");
-  char *str = "Hello from FAT32!";
-  vfs_write(file, (uint8_t *)str, 0, strlen(str));
+  /* vfs_mkdir("/test_dir", 0); */
+  /* fs_file_t *file = vfs_create("/test_dir/hello.txt"); */
+  /* char *str = "Hello from FAT32!"; */
+  /* vfs_write(file, (uint8_t *)str, 0, strlen(str)); */
 
   proc_t *user_proc = sched_create_proc("u_proc", 1);
   elf_run_binary(
-  "julia", "/prog/julia", user_proc, 5000,
+  "trig", "/prog/trig", user_proc, 5000,
   (uint64_t)vmm_virt_to_phys(&kernel_pagemap, (uintptr_t)framebuffer),
   (uint64_t)fb_width, (uint64_t)fb_height);
 

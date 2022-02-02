@@ -424,6 +424,7 @@ uint32_t fat_find(device_t *dev, uint32_t directory,
   }
 
   kfree(buffer);
+
   return 0xfffffff;
 }
 
@@ -807,6 +808,9 @@ fs_file_t *fat_open(fs_t *fs, char *path) {
 }
 
 fs_file_t *fat_create(fs_t *fs, char *path) {
+  if (fat_find(fs->dev, 0, NULL, NULL, NULL, path) != 0xfffffff)
+    return fat_open(fs, path);
+  
   char *orig_path = path;
 
   datetime_t time = rtc_get_datetime();
@@ -1026,6 +1030,9 @@ fs_file_t *fat_create(fs_t *fs, char *path) {
 
 fs_file_t *fat_mkdir(fs_t *fs, char *path, int mode) {
   (void)mode;
+
+  if (fat_find(fs->dev, 0, NULL, NULL, NULL, path) != 0xfffffff)
+    return fat_open(fs, path);
 
   char *unmodified_path = path;
 

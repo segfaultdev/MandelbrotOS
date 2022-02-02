@@ -6,6 +6,7 @@
 #include <mm/vmm.h>
 #include <printf.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 #include <tasking/scheduler.h>
 
@@ -17,6 +18,8 @@
 #define ELF_HEAD_LOAD 1
 
 #define ELF_SECT_NOBITS 8
+
+#define SHN_UNDEF (0x00) // Undefined/Not present
 
 char elf_ident[4] = {0x7f, 'E', 'L', 'F'};
 
@@ -47,6 +50,7 @@ uint8_t elf_run_binary(char *name, char *path, proc_t *proc, size_t time_slice,
                                           header->sect_head_size);
       continue;
     }
+
     if (sect_header->type == ELF_SECT_NOBITS) {
       uintptr_t mem = (uintptr_t)pmalloc(
           ALIGN_UP(sect_header->size, PAGE_SIZE) / PAGE_SIZE);
