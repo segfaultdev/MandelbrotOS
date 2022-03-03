@@ -146,26 +146,15 @@ extern c_syscall_handler
 syscall_isr:
   cli
   cld
-
-  ; The reason we use this instead of pushaq is so that I can change rax, AKA: the return value
-  push rbx
-  push rcx
-  push rdx
-  push rsi
-  push rdi
-  push rbp
-  push r8
-  push r9
-  push r10
-  push r11
-  push r12
-  push r13
-  push r14
-  push r15
+  
+  push 0
+  push 0x45
+  
+  pushaq
 
   mov rdi, rsp
   call c_syscall_handler
-  
+
   pop r15
   pop r14
   pop r13
@@ -180,6 +169,9 @@ syscall_isr:
   pop rdx
   pop rcx
   pop rbx
+  add rsp, 8 ; Don't restore rax. It has our return value.
+
+  add rsp, 16
 
   iretq
 

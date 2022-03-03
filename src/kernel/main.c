@@ -1,7 +1,9 @@
 #include <acpi/acpi.h>
 #include <boot/stivale2.h>
 #include <cpu_locals.h>
-#include <device.h>
+#include <dev/device.h>
+#include <dev/fbdev.h>
+#include <dev/tty.h>
 #include <drivers/ahci.h>
 #include <drivers/apic.h>
 #include <drivers/kbd.h>
@@ -14,6 +16,7 @@
 #include <fb/fb.h>
 #include <fs/devfs.h>
 #include <fs/fat32.h>
+#include <fs/tmpfs.h>
 #include <fs/vfs.h>
 #include <klog.h>
 #include <main.h>
@@ -56,20 +59,31 @@ void k_thread() {
   klog_init(init_pcspkr(), "PC speaker");
   klog_init(init_sata(), "SATA");
   klog_init(init_vfs(), "Virtual filesystem");
+  klog_init(init_tmpfs(), "TMPFS");
   klog_init(init_fat(), "FAT32");
 
-  vfs_mount("/", device_get(0));
+  vfs_mount("/", device_get(0), "FAT32");
+  vfs_mount("/dev/", NULL, "TMPFS");
 
-  /* vfs_mkdir("/test_dir", 0); */
-  /* fs_file_t *file = vfs_create("/test_dir/hello.txt"); */
-  /* char *str = "Hello from FAT32!"; */
-  /* vfs_write(file, (uint8_t *)str, 0, strlen(str)); */
+  klog_init(init_tty("/dev"), "TTY0");
+  klog_init(init_fbdev("/dev"), "Framebuffer device");
+
+  fs_file_t *tty0 = vfs_open("/dev/tty0");
+
+  syscall_file_t *fil = kmalloc(sizeof(syscall_file_t));
+  *fil = (syscall_file_t){
+      .file = tty0,
+      .fd = 1,
+      .dirty = 0,
+      .buf = NULL,
+      .is_buffered = 0,
+  };
 
   proc_t *user_proc = sched_create_proc("u_proc", 1);
-  elf_run_binary(
-  "trig", "/prog/trig", user_proc, 5000,
-  (uint64_t)vmm_virt_to_phys(&kernel_pagemap, (uintptr_t)framebuffer),
-  (uint64_t)fb_width, (uint64_t)fb_height);
+  vec_push(&user_proc->fds, fil);
+  user_proc->last_fd = 2;
+
+  elf_run_binary("sin", "/prog/mandelbrot", user_proc, 5000, 0, 0, 0);
 
   while (1)
     ;

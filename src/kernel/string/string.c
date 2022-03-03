@@ -1,3 +1,4 @@
+#include <mm/kheap.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -85,4 +86,10 @@ int memcmp(char *str_1, char *str_2, size_t size) {
   }
 
   return 0;
+}
+
+char *strdup(char *s1) {
+  char *str = kmalloc(strlen(s1) + 1);
+  memcpy(str, s1, strlen(s1) + 1);
+  return str;
 }

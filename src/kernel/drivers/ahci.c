@@ -1,5 +1,5 @@
 #include <acpi/acpi.h>
-#include <device.h>
+#include <dev/device.h>
 #include <drivers/ahci.h>
 #include <drivers/mbr.h>
 #include <fs/vfs.h>
@@ -107,7 +107,7 @@ void ahci_port_init(hba_port_t *port) {
 int8_t ahci_find_cmdslot(hba_port_t *port) {
   uint32_t slots = (port->sact | port->ci);
 
-  for (int i = 0; i < 32; i++) {
+  for (size_t i = 0; i < 32; i++) {
     if (!(slots & 1))
       return i;
     slots >>= 1;
@@ -117,14 +117,17 @@ int8_t ahci_find_cmdslot(hba_port_t *port) {
 }
 // End snippets
 
-uint8_t sata_read(device_t *dev, uint64_t start, uint32_t count, uint8_t *buf) {
+uint8_t sata_read(device_t *dev, size_t start, size_t count, uint8_t *buf) {
+  uint32_t count32 = (uint32_t)count;
+  uint64_t start64 = (uint64_t)start;
+
   hba_port_t *port = ((ahci_private_data_t *)dev->private_data)->port;
 
   if (((ahci_private_data_t *)dev->private_data)->part)
-    start += ((ahci_private_data_t *)dev->private_data)->part->sector_start;
+    start64 += ((ahci_private_data_t *)dev->private_data)->part->sector_start;
 
-  uint32_t startl = (uint32_t)start;
-  uint32_t starth = (uint32_t)(start >> 32);
+  uint32_t startl = (uint32_t)start64;
+  uint32_t starth = (uint32_t)(start64 >> 32);
 
   port->is = (uint32_t)-1;
 
@@ -136,7 +139,7 @@ uint8_t sata_read(device_t *dev, uint64_t start, uint32_t count, uint8_t *buf) {
   cmd_header += slot;
   cmd_header->cfl = sizeof(fis_reg_host_to_device_t) / sizeof(uint32_t);
   cmd_header->w = 0;
-  cmd_header->prdtl = (uint16_t)((count - 1) >> 4) + 1;
+  cmd_header->prdtl = (uint16_t)((count32 - 1) >> 4) + 1;
 
   hba_cmd_tbl_t *cmd_table = (hba_cmd_tbl_t *)(uintptr_t)cmd_header->ctba;
   memset(cmd_table, 0,
@@ -151,12 +154,12 @@ uint8_t sata_read(device_t *dev, uint64_t start, uint32_t count, uint8_t *buf) {
     cmd_table->prdt_entry[i].i = 1;
 
     buf += 8 * 1024;
-    count -= 16;
+    count32 -= 16;
   }
 
   cmd_table->prdt_entry[i].dba =
       (uint32_t)(uintptr_t)((uint64_t)buf - PHYS_MEM_OFFSET);
-  cmd_table->prdt_entry[i].dbc = (count << 9) - 1;
+  cmd_table->prdt_entry[i].dbc = (count32 << 9) - 1;
   cmd_table->prdt_entry[i].i = 1;
 
   fis_reg_host_to_device_t *cmd_fis =
@@ -175,8 +178,8 @@ uint8_t sata_read(device_t *dev, uint64_t start, uint32_t count, uint8_t *buf) {
   cmd_fis->lba4 = (uint8_t)(starth);
   cmd_fis->lba5 = (uint8_t)(starth >> 8);
 
-  cmd_fis->countl = (count & 0xFF);
-  cmd_fis->counth = (count >> 8);
+  cmd_fis->countl = (count32 & 0xFF);
+  cmd_fis->counth = (count32 >> 8);
 
   for (uint32_t spin = 0; spin < 1000000; spin++) {
     if (!(port->tfd & (ATA_DEV_BUSY | ATA_DEV_DRQ)))
@@ -200,15 +203,17 @@ uint8_t sata_read(device_t *dev, uint64_t start, uint32_t count, uint8_t *buf) {
   return 0;
 }
 
-uint8_t sata_write(device_t *dev, uint64_t start, uint32_t count,
-                   uint8_t *buf) {
+uint8_t sata_write(device_t *dev, size_t start, size_t count, uint8_t *buf) {
+  uint32_t count32 = (uint32_t)count;
+  uint64_t start64 = (uint64_t)start;
+
   hba_port_t *port = ((ahci_private_data_t *)dev->private_data)->port;
 
   if (((ahci_private_data_t *)dev->private_data)->part)
-    start += ((ahci_private_data_t *)dev->private_data)->part->sector_start;
-  
-  uint32_t startl = (uint32_t)start;
-  uint32_t starth = (uint32_t)(start >> 32);
+    start64 += ((ahci_private_data_t *)dev->private_data)->part->sector_start;
+
+  uint32_t startl = (uint32_t)start64;
+  uint32_t starth = (uint32_t)(start64 >> 32);
 
   port->is = (uint32_t)-1;
 
@@ -222,7 +227,7 @@ uint8_t sata_write(device_t *dev, uint64_t start, uint32_t count,
   cmd_header->w = 1;
   cmd_header->c = 1;
   cmd_header->p = 1;
-  cmd_header->prdtl = (uint16_t)((count - 1) >> 4) + 1;
+  cmd_header->prdtl = (uint16_t)((count32 - 1) >> 4) + 1;
 
   hba_cmd_tbl_t *cmd_table = (hba_cmd_tbl_t *)(uintptr_t)cmd_header->ctba;
   memset(cmd_table, 0,
@@ -237,12 +242,12 @@ uint8_t sata_write(device_t *dev, uint64_t start, uint32_t count,
     cmd_table->prdt_entry[i].i = 1;
 
     buf += 8 * 1024;
-    count -= 16;
+    count32 -= 16;
   }
 
   cmd_table->prdt_entry[i].dba =
       (uint32_t)(uintptr_t)((uint64_t)buf - PHYS_MEM_OFFSET);
-  cmd_table->prdt_entry[i].dbc = (count << 9) - 1;
+  cmd_table->prdt_entry[i].dbc = (count32 << 9) - 1;
   cmd_table->prdt_entry[i].i = 1;
 
   fis_reg_host_to_device_t *cmd_fis =
@@ -261,8 +266,8 @@ uint8_t sata_write(device_t *dev, uint64_t start, uint32_t count,
   cmd_fis->lba4 = (uint8_t)(starth);
   cmd_fis->lba5 = (uint8_t)(starth >> 8);
 
-  cmd_fis->countl = (count & 0xFF);
-  cmd_fis->counth = (count >> 8);
+  cmd_fis->countl = (count32 & 0xFF);
+  cmd_fis->counth = (count32 >> 8);
 
   for (uint32_t spin = 0; spin < 1000000; spin++) {
     if (!(port->tfd & (ATA_DEV_BUSY | ATA_DEV_DRQ)))
@@ -300,19 +305,20 @@ void ahci_init_abars() {
             *dev = (device_t){
                 .private_data = kmalloc(sizeof(ahci_private_data_t)),
                 .name = "SATA",
-                .type = DEVICE_BLOCK,
-                .fs_type = DEVICE_FS_DISK,
+                .type = S_IFBLK,
+                .block_count = 0, // TODO: figure out block count
+                .block_size = 512,
                 .read = sata_read,
                 .write = sata_write,
             };
 
-            *((ahci_private_data_t *)dev->private_data) = (ahci_private_data_t) {
-              .port = &abar->ports[i],
-              .part = NULL,
+            *((ahci_private_data_t *)dev->private_data) = (ahci_private_data_t){
+                .port = &abar->ports[i],
+                .part = NULL,
             };
 
             partition_layout_t *part = probe_mbr(dev, p);
-            
+
             if (part) {
               ((ahci_private_data_t *)dev->private_data)->part = part;
               device_add(dev);
@@ -326,16 +332,18 @@ void ahci_init_abars() {
           *main_dev = (device_t){
               .private_data = kmalloc(sizeof(ahci_private_data_t)),
               .name = "SATA",
-              .type = DEVICE_BLOCK,
-              .fs_type = DEVICE_FS_DISK,
+              .type = S_IFBLK,
+              .block_count = 0, // TODO: figure out block count
+              .block_size = 512,
               .read = sata_read,
               .write = sata_write,
           };
 
-          *((ahci_private_data_t *)main_dev->private_data) = (ahci_private_data_t) {
-            .port = &abar->ports[i],
-            .part = NULL,
-          };
+          *((ahci_private_data_t *)main_dev->private_data) =
+              (ahci_private_data_t){
+                  .port = &abar->ports[i],
+                  .part = NULL,
+              };
 
           device_add(main_dev);
         }
@@ -347,7 +355,8 @@ int init_sata() {
   abars.data = kcalloc(sizeof(uint64_t));
 
   for (size_t i = 0; i < (size_t)pci_devices.length; i++)
-    if (pci_devices.data[i]->header.class == 1 && pci_devices.data[i]->header.subclass == 6)
+    if (pci_devices.data[i]->header.class == 1 &&
+        pci_devices.data[i]->header.subclass == 6)
       vec_push(&abars, pci_get_bar(pci_devices.data[i], 5).base);
 
   if (!abars.length)

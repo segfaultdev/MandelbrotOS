@@ -113,14 +113,6 @@ pixel_t hsv2rgb(float h, float s, float v) {
   }
 }
 
-pixel_t anti_colour(pixel_t pix) {
-  return (pixel_t){
-      .red = pix.red ^ 0xff,
-      .green = pix.green ^ 0xff,
-      .blue = pix.blue ^ 0xff,
-  };
-}
-
 typedef struct mmap_args {
   void *addr;
   size_t length;
@@ -152,28 +144,16 @@ void main() {
   framebuffer =
       (uint32_t *)intsyscall(SYSCALL_MMAP, (uint64_t)&args, 0, 0, 0, 0);
 
-  /* for (size_t i = 0; i < height * width; i++) */
-  /* framebuffer[i] = 0; */
-
-  /* for (int y = height - 1, row = 0; y >= 0; y--, row++) */
-  /* for (int x = 0; x + y < height; x++) */
-  /* if (!(x & y)) */
-  /* framebuffer[(row * width) + (y / 2) + x] = y * x; */
+  pixel_t *fb_pix = (void *)framebuffer;
 
   double p = 0;
-
-  pixel_t *fb_pix = (void *)framebuffer;
 
   while (1) {
     for (size_t x = 0; x < width; x++) {
       for (size_t y = 0; y < height; y++) {
         size_t raw_pos = x + y * width;
-        if (x & y)
-          fb_pix[raw_pos] = hsv2rgb(p, 1 - ((double)y / (double)height),
-                                    (double)x / (double)width);
-        else
-          fb_pix[raw_pos] = anti_colour(hsv2rgb(
-              p, 1 - ((double)y / (double)height), (double)x / (double)width));
+        fb_pix[raw_pos] = hsv2rgb(p, 1 - ((double)y / (double)height),
+                                  (double)x / (double)width);
       }
       p += 0.0005;
       if (p > 360.0)

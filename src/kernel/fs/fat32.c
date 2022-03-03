@@ -1,4 +1,4 @@
-#include <device.h>
+#include <dev/device.h>
 #include <drivers/mbr.h>
 #include <drivers/rtc.h>
 #include <fb/fb.h>
@@ -7,6 +7,7 @@
 #include <klog.h>
 #include <mm/kheap.h>
 #include <mm/pmm.h>
+#include <mm/vmm.h>
 #include <printf.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -38,8 +39,7 @@ uint32_t fat_get_next_cluster(device_t *dev, uint32_t cluster) {
 }
 
 uint32_t fat_read_cluster(device_t *dev, uint8_t *buffer, uint32_t cluster) {
-  dev->read(dev,
-            fat_cluster_to_sector(dev, cluster),
+  dev->read(dev, fat_cluster_to_sector(dev, cluster),
             ((fat_fs_private_info_t *)dev->fs->private_data)->boot.cluster_size,
             buffer);
 
@@ -89,10 +89,9 @@ uint32_t fat_find_free_cluster(device_t *dev) {
   for (size_t i = 0;
        i < ((fat_fs_private_info_t *)dev->fs->private_data)->boot.table_size;
        i++) {
-    uint64_t sector =
-        ((fat_fs_private_info_t *)dev->fs->private_data)
-            ->boot.reserved_sectors +
-        i;
+    uint64_t sector = ((fat_fs_private_info_t *)dev->fs->private_data)
+                          ->boot.reserved_sectors +
+                      i;
 
     dev->read(dev, sector, 1, (uint8_t *)fat_buffer);
 
@@ -194,8 +193,7 @@ uint32_t fat_get_free_dir_entry_chain(device_t *dev, uint32_t directory,
 
 uint32_t fat_write_cluster(device_t *dev, uint8_t *buffer, uint32_t cluster) {
   dev->write(
-      dev,
-      fat_cluster_to_sector(dev, cluster),
+      dev, fat_cluster_to_sector(dev, cluster),
       ((fat_fs_private_info_t *)dev->fs->private_data)->boot.cluster_size,
       buffer);
 
@@ -429,7 +427,7 @@ uint32_t fat_find(device_t *dev, uint32_t directory,
 }
 
 // This is only the functions I need to link the FAT driver to the VFS
-int fat_ioctl(fs_file_t *file, uint64_t cmd, uint64_t arg) {
+uint64_t fat_ioctl(fs_file_t *file, uint64_t cmd, void *arg) {
   // TODO: Do I need IOCTL for fat?
   (void)file;
   (void)cmd;
@@ -439,17 +437,39 @@ int fat_ioctl(fs_file_t *file, uint64_t cmd, uint64_t arg) {
 
 int fat_chmod(fs_file_t *file, int mode) {
   // Fat doesn't support this sadly
-  (void)file;
-  (void)mode;
+  file->mode = mode;
   return 0;
 }
 
 int fat_chown(fs_file_t *file, int uid, int gid) {
   // No perms for fat. Sad
-  (void)file;
+  file->uid = uid;
+  file->gid = gid;
+  return 0;
+}
+
+fs_file_t *fat_mknod(fs_t *fs, char *name, int mode, int uid, int gid,
+                     device_t *dev) {
+  (void)fs;
+  (void)name;
+  (void)mode;
+  (void)dev;
   (void)uid;
   (void)gid;
-  return 0;
+  return NULL;
+}
+
+void *fat_mmap(fs_file_t *file, pagemap_t *pg, syscall_file_t *sfile,
+               void *addr, size_t size, size_t offset, int prot, int flags) {
+  (void)file;
+  (void)pg;
+  (void)addr;
+  (void)size;
+  (void)offset;
+  (void)flags;
+  (void)sfile;
+  (void)prot;
+  return NULL;
 }
 
 int fat_truncate(fs_file_t *file, size_t size) {
@@ -589,8 +609,10 @@ int fat_write(fs_file_t *file, uint8_t *buf, size_t offset, size_t count) {
   entry.modified_minute = time.minutes;
   entry.modified_second = time.seconds / 2;
 
-  if (offset + count > entry.size)
+  if (offset + count > entry.size) {
+    file->length = offset + count;
     entry.size = offset + count;
+  }
 
   fat_set_dir_entry(file->fs->dev, dir, index, entry);
 
@@ -599,7 +621,7 @@ int fat_write(fs_file_t *file, uint8_t *buf, size_t offset, size_t count) {
   return 0;
 }
 
-int fat_readdir(fs_file_t *file, dirent_t *dirent) {
+int fat_readdir(fs_file_t *file, dirent_t *dirent, size_t pos) {
   datetime_t time = rtc_get_datetime();
   time.year += 1900;
 
@@ -615,18 +637,18 @@ int fat_readdir(fs_file_t *file, dirent_t *dirent) {
 
   fat_read_cluster_chain(file->fs->dev, (uint8_t *)entries, cluster);
 
-  if (entries[file->offset].flags == 0xf) {
-    long_filename_t *lfn = (void *)&entries[file->offset];
+  if (entries[pos].flags == 0xf) {
+    long_filename_t *lfn = (void *)&entries[pos];
     size_t count = 0;
 
     while (lfn->flags != 0x1 && lfn->flags != 0x41) {
       count++;
-      lfn = (void *)&entries[file->offset + count];
+      lfn = (void *)&entries[pos + count];
     }
 
     count++;
 
-    lfn = (void *)&entries[file->offset + count - 1];
+    lfn = (void *)&entries[pos + count - 1];
 
     uint8_t *long_filename = kmalloc(
         count *
@@ -641,40 +663,28 @@ int fat_readdir(fs_file_t *file, dirent_t *dirent) {
       for (size_t x = 0; x < 2; x++)
         long_filename[j * 13 + x + 11] = lfn->filename_hi[x];
 
-      lfn = (void *)&entries[file->offset + count - j - 2];
+      lfn = (void *)&entries[pos + count - j - 2];
     }
 
     strcat(dirent->name, (char *)long_filename);
-
-    file->offset += count - 1;
 
     kfree(long_filename);
 
     return 0;
   }
 
-  entries[file->offset].accessed_day = time.day;
-  entries[file->offset].accessed_month = time.month;
-  entries[file->offset].accessed_year = time.year - 1980;
+  entries[pos].accessed_day = time.day;
+  entries[pos].accessed_month = time.month;
+  entries[pos].accessed_year = time.year - 1980;
 
   fat_set_dir_entry(file->fs->dev, current_dir,
-                    (file->offset + 1) %
-                        (((fat_fs_private_info_t *)file->fs->private_data)
-                             ->boot.cluster_size *
-                         512 / sizeof(dir_entry_t)),
-                    entries[file->offset]);
+                    pos % (((fat_fs_private_info_t *)file->fs->private_data)
+                               ->boot.cluster_size *
+                           512 / sizeof(dir_entry_t)),
+                    entries[pos]);
 
-  if ((file->offset + 1) * sizeof(dir_entry_t) %
-          ((fat_fs_private_info_t *)file->fs->private_data)
-              ->boot.cluster_size ==
-      0)
-    ((fat_file_private_info_t *)file->private_data)->parent_cluster =
-        fat_get_next_cluster(file->fs->dev, current_dir);
-
-  strcat(dirent->name, (char *)entries[file->offset].filename);
+  strcat(dirent->name, (char *)entries[pos].filename);
   dirent->name[11] = 0;
-
-  file->offset++;
 
   return 0;
 }
@@ -703,52 +713,6 @@ int fat_delete(fs_file_t *file) {
   return fat_close(file);
 }
 
-int fat_fstat(fs_file_t *file, stat_t *stat) {
-  dir_entry_t dir = ((fat_file_private_info_t *)file->private_data)->dir;
-  uint32_t dir_no = ((fat_file_private_info_t *)file->private_data)->cluster;
-
-  *stat = (stat_t){
-      .device_id = 0,
-      .file_serial = dir_no,
-      .hardlink_count = 0,
-      .user_id = 0,
-      .group_id = 0,
-      .device_type = 0,
-      .file_size = dir.size,
-
-      .last_access_time =
-          rtc_mktime((datetime_t){.day = dir.accessed_day,
-                                  .month = dir.accessed_month,
-                                  .year = dir.accessed_year + 1980}),
-      .last_modification_time =
-          rtc_mktime((datetime_t){.day = dir.modified_day,
-                                  .month = dir.modified_month,
-                                  .year = dir.modified_year + 1980,
-                                  .seconds = dir.modified_second * 2,
-                                  .minutes = dir.modified_minute,
-                                  .hours = dir.modified_hour}),
-      .last_status_change_time =
-          rtc_mktime((datetime_t){.day = dir.modified_day,
-                                  .month = dir.modified_month,
-                                  .year = dir.modified_year + 1980,
-                                  .seconds = dir.modified_second * 2,
-                                  .minutes = dir.modified_minute,
-                                  .hours = dir.modified_hour}),
-
-      .creation_time = rtc_mktime((datetime_t){
-          .day = dir.created_day,
-          .month = dir.created_month,
-          .year = dir.created_year + 1980,
-          .seconds = dir.created_second * 2 + (dir.created_ticks % 2),
-          .minutes = dir.created_minute,
-          .hours = dir.created_hour}),
-      .block_size = 0,
-      .block_count = 0,
-  };
-
-  return 0;
-}
-
 int fat_rmdir(fs_file_t *file) {
   uint32_t cluster =
       ((fat_file_private_info_t *)file->private_data)->parent_cluster;
@@ -775,42 +739,69 @@ file_ops_t fat_file_ops = (file_ops_t){
     .rmdir = fat_rmdir,
     .delete = fat_delete,
     .truncate = fat_truncate,
-    .fstat = fat_fstat,
     .close = fat_close,
     .readdir = fat_readdir,
     .ioctl = fat_ioctl,
     .chmod = fat_chmod,
     .chown = fat_chown,
+    .mmap = fat_mmap,
 };
 
 fs_file_t *fat_open(fs_t *fs, char *path) {
   fat_file_private_info_t *priv = kmalloc(sizeof(fat_file_private_info_t));
-  priv->cluster = fat_find(fs->dev, 0, &priv->dir, &priv->parent_cluster,
-                           &priv->index, path);
-  if (priv->cluster == 0xffffff8)
+  if ((priv->cluster = fat_find(fs->dev, 0, &priv->dir, &priv->parent_cluster,
+                                &priv->index, path)) == 0xffffff8)
     return NULL;
 
   fs_file_t *file = kmalloc(sizeof(fs_file_t));
   *file = (fs_file_t){
-      .uid = 0, // Sadly, fat isn't super hot on POSIX. Thus, it can only be
-                // opened by root user. Isn't that sad?
+      .uid = 0,
       .gid = 0,
       .file_ops = &fat_file_ops,
       .fs = fs,
       .path = path,
-      .isdir = (priv->dir.directory) ? 1 : 0,
-      .offset = 0,
       .length = priv->dir.size,
+      .inode = priv->cluster,
       .private_data = (void *)priv,
+      .mode = 0777 | ((priv->dir.directory) ? S_IFDIR : S_IFREG),
+
+      .last_access_time =
+          rtc_mktime((datetime_t){.day = priv->dir.accessed_day,
+                                  .month = priv->dir.accessed_month,
+                                  .year = priv->dir.accessed_year + 1980}),
+      .last_modification_time =
+          rtc_mktime((datetime_t){.day = priv->dir.modified_day,
+                                  .month = priv->dir.modified_month,
+                                  .year = priv->dir.modified_year + 1980,
+                                  .seconds = priv->dir.modified_second * 2,
+                                  .minutes = priv->dir.modified_minute,
+                                  .hours = priv->dir.modified_hour}),
+      .last_status_change_time =
+          rtc_mktime((datetime_t){.day = priv->dir.modified_day,
+                                  .month = priv->dir.modified_month,
+                                  .year = priv->dir.modified_year + 1980,
+                                  .seconds = priv->dir.modified_second * 2,
+                                  .minutes = priv->dir.modified_minute,
+                                  .hours = priv->dir.modified_hour}),
+
+      .creation_time =
+          rtc_mktime((datetime_t){.day = priv->dir.created_day,
+                                  .month = priv->dir.created_month,
+                                  .year = priv->dir.created_year + 1980,
+                                  .seconds = priv->dir.created_second * 2 +
+                                             (priv->dir.created_ticks % 2),
+                                  .minutes = priv->dir.created_minute,
+                                  .hours = priv->dir.created_hour}),
   };
 
   return file;
 }
 
-fs_file_t *fat_create(fs_t *fs, char *path) {
-  if (fat_find(fs->dev, 0, NULL, NULL, NULL, path) != 0xfffffff)
-    return fat_open(fs, path);
-  
+fs_file_t *fat_create(fs_t *fs, char *path, int mode, int uid, int gid) {
+  (void)uid;
+  (void)gid;
+  (void)mode;
+
   char *orig_path = path;
 
   datetime_t time = rtc_get_datetime();
@@ -819,7 +810,7 @@ fs_file_t *fat_create(fs_t *fs, char *path) {
   uint32_t parent_cluster;
 
   if (fat_find(fs->dev, 0, NULL, &parent_cluster, NULL, path) != 0xfffffff)
-    return NULL;
+    return fat_open(fs, path);
 
   path = strrchr(path, '/');
   if (!path)
@@ -1028,11 +1019,10 @@ fs_file_t *fat_create(fs_t *fs, char *path) {
   return fat_open(fs, orig_path);
 }
 
-fs_file_t *fat_mkdir(fs_t *fs, char *path, int mode) {
+fs_file_t *fat_mkdir(fs_t *fs, char *path, int mode, int uid, int gid) {
+  (void)uid;
+  (void)gid;
   (void)mode;
-
-  if (fat_find(fs->dev, 0, NULL, NULL, NULL, path) != 0xfffffff)
-    return fat_open(fs, path);
 
   char *unmodified_path = path;
 
@@ -1042,7 +1032,7 @@ fs_file_t *fat_mkdir(fs_t *fs, char *path, int mode) {
   uint32_t parent_cluster;
 
   if (fat_find(fs->dev, 0, NULL, &parent_cluster, NULL, path) != 0xfffffff)
-    return NULL;
+    return fat_open(fs, path);
 
   path = strrchr(path, '/');
   if (!path)
@@ -1277,8 +1267,7 @@ fs_ops_t fat_fs_ops;
 
 fs_t *fat_mount(device_t *dev) {
   bpb_t bios_block;
-  dev->read(dev, 0, 1,
-            (uint8_t *)&bios_block);
+  dev->read(dev, 0, 1, (uint8_t *)&bios_block);
 
   if (bios_block.signature != 0x28 && bios_block.signature != 0x29)
     return NULL;
@@ -1301,6 +1290,7 @@ fs_ops_t fat_fs_ops = (fs_ops_t){
     .mkdir = fat_mkdir,
     .mount = fat_mount,
     .open = fat_open,
+    .mknod = fat_mknod,
     .post_mount = NULL, // FAT doesn't need any post_mount stuff for now
 };
 

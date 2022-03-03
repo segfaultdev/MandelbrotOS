@@ -1,7 +1,7 @@
 #ifndef __MBR_H__
 #define __MBR_H__
 
-#include <device.h>
+#include <dev/device.h>
 #include <stdint.h>
 #include <vec.h>
 

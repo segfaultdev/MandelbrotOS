@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/syscall.h>
 #include <tasking/scheduler.h>
 
 #define ALIGN_UP(__addr, __align) (((__addr) + (__align)-1) & ~((__align)-1))
@@ -18,8 +19,6 @@
 #define ELF_HEAD_LOAD 1
 
 #define ELF_SECT_NOBITS 8
-
-#define SHN_UNDEF (0x00) // Undefined/Not present
 
 char elf_ident[4] = {0x7f, 'E', 'L', 'F'};
 
@@ -44,20 +43,27 @@ uint8_t elf_run_binary(char *name, char *path, proc_t *proc, size_t time_slice,
 
   for (size_t i = 0; i < header->sect_head_count; i++) {
     elf_sect_header_t *sect_header = &sect_headers[i];
-
-    if (!sect_header->size) {
-      sect_header = (elf_sect_header_t *)((uint8_t *)sect_header +
-                                          header->sect_head_size);
+    if (!sect_header->size)
       continue;
-    }
-
-    if (sect_header->type == ELF_SECT_NOBITS) {
+    else if (sect_header->type == ELF_SECT_NOBITS) {
       uintptr_t mem = (uintptr_t)pmalloc(
           ALIGN_UP(sect_header->size, PAGE_SIZE) / PAGE_SIZE);
-
       for (size_t j = 0; j < ALIGN_UP(sect_header->size, PAGE_SIZE) / PAGE_SIZE;
            j += PAGE_SIZE)
         vmm_map_page(proc->pagemap, mem + j, sect_header->addr + j, 0b111);
+
+      mmap_range_t *mmap_range = kmalloc(sizeof(mmap_range_t));
+      *mmap_range = (mmap_range_t){
+          .file = NULL,
+          .flags = MAP_FIXED | MAP_ANON,
+          .length = ALIGN_UP(sect_header->size, PAGE_SIZE),
+          .offset = 0,
+          .prot = PROT_READ | PROT_WRITE | PROT_EXEC,
+          .phys_addr = mem,
+          .virt_addr = sect_header->addr,
+      };
+
+      vec_push(&proc->pagemap->ranges, mmap_range);
     }
   }
 
@@ -72,6 +78,19 @@ uint8_t elf_run_binary(char *name, char *path, proc_t *proc, size_t time_slice,
            j < ALIGN_UP(prog_header->mem_size, PAGE_SIZE) / PAGE_SIZE;
            j += PAGE_SIZE)
         vmm_map_page(proc->pagemap, mem + j, prog_header->virt_addr + j, 0b111);
+
+      mmap_range_t *mmap_range = kmalloc(sizeof(mmap_range_t));
+      *mmap_range = (mmap_range_t){
+          .file = NULL,
+          .flags = MAP_FIXED | MAP_ANON,
+          .length = ALIGN_UP(prog_header->mem_size, PAGE_SIZE),
+          .offset = 0,
+          .prot = PROT_READ | PROT_WRITE | PROT_EXEC,
+          .phys_addr = mem,
+          .virt_addr = prog_header->virt_addr,
+      };
+
+      vec_push(&proc->pagemap->ranges, mmap_range);
 
       memset((void *)mem, 0, prog_header->mem_size);
       memcpy((void *)mem, (void *)((uint64_t)buffer + prog_header->offset),

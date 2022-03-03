@@ -1,7 +1,7 @@
 #ifndef __AHCI_H__
 #define __AHCI_H__
 
-#include <device.h>
+#include <dev/device.h>
 #include <drivers/mbr.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -192,8 +192,6 @@ typedef struct ahci_private_data {
   partition_layout_t *part;
 } ahci_private_data_t;
 
-uint8_t sata_read(device_t *dev, uint64_t start, uint32_t count, uint8_t *buf);
-uint8_t sata_write(device_t *dev, uint64_t start, uint32_t count, uint8_t *buf);
 int init_sata();
 
 #endif

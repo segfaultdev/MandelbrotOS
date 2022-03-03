@@ -19,15 +19,16 @@ typedef struct proc {
   char *name;
   int status;
   int enqueued;
+  int user;
   pagemap_t *pagemap;
-  uint8_t *heap;
-  size_t heap_size;
-  size_t heap_capacity;
   size_t pid;
-  size_t thread_count;
+  size_t ppid;
   uintptr_t virtual_stack_top;
-  vec_t(fs_file_t) fds;
+  uintptr_t mmap_anon_last;
+  size_t last_fd;
+  vec_t(syscall_file_t *) fds;
   vec_t(struct thread *) threads;
+  vec_t(struct proc *) children;
 } proc_t;
 
 typedef struct thread {
@@ -56,6 +57,8 @@ thread_t *sched_create_thread(char *name, uintptr_t addr, size_t time_slice,
                               int user, int auto_enqueue, proc_t *mother_proc,
                               uint64_t arg1, uint64_t arg2, uint64_t arg3);
 proc_t *sched_create_proc(char *name, int user);
+void sched_destroy_proc(proc_t *proc);
+size_t sched_fork(registers_t *regs);
 void await_sched_start();
 void await();
 

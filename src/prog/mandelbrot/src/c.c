@@ -31,12 +31,36 @@
 #define MAP_FIXED 0x4
 #define MAP_ANON 0x8
 
-uint64_t intsyscall(uint64_t id, uint64_t arg1, uint64_t arg2, uint64_t arg3,
-                    uint64_t arg4, uint64_t arg5);
+#define ITTERATIONS 80
+
+#define ABS(x) ((x < 0) ? (-x) : x)
 
 uint16_t width;
 uint16_t height;
 uint32_t *framebuffer;
+
+uint64_t intsyscall(uint64_t id, uint64_t arg1, uint64_t arg2, uint64_t arg3,
+                    uint64_t arg4, uint64_t arg5);
+
+static inline double cos(double x) {
+  register double val;
+  asm volatile("fcos\n" : "=t"(val) : "0"(x));
+  return val;
+}
+
+static inline double sin(double x) {
+  register double val;
+  asm volatile("fsin\n" : "=t"(val) : "0"(x));
+  return val;
+}
+
+static inline double tan(double x) { return sin(x) / cos(x); }
+
+static inline double sqrt(double x) {
+  double res;
+  asm("fsqrt" : "=t"(res) : "0"(x));
+  return res;
+}
 
 typedef struct pixel {
   uint8_t blue;
@@ -61,6 +85,10 @@ pixel_t hsv2rgb(float h, float s, float v) {
         .blue = s,
     };
   }
+
+  while (h > 360)
+    h -= 360;
+
   h /= 60; // sector 0 to 5
   i = floor(h);
   f = h - i; // factorial part of h
@@ -113,14 +141,6 @@ pixel_t hsv2rgb(float h, float s, float v) {
   }
 }
 
-pixel_t anti_colour(pixel_t pix) {
-  return (pixel_t){
-      .red = pix.red ^ 0xff,
-      .green = pix.green ^ 0xff,
-      .blue = pix.blue ^ 0xff,
-  };
-}
-
 typedef struct mmap_args {
   void *addr;
   size_t length;
@@ -152,32 +172,33 @@ void main() {
   framebuffer =
       (uint32_t *)intsyscall(SYSCALL_MMAP, (uint64_t)&args, 0, 0, 0, 0);
 
-  /* for (size_t i = 0; i < height * width; i++) */
-  /* framebuffer[i] = 0; */
+  pixel_t *pix_buf = (void *)framebuffer;
 
-  /* for (int y = height - 1, row = 0; y >= 0; y--, row++) */
-  /* for (int x = 0; x + y < height; x++) */
-  /* if (!(x & y)) */
-  /* framebuffer[(row * width) + (y / 2) + x] = y * x; */
+  int max = 100;
 
-  double p = 0;
-
-  pixel_t *fb_pix = (void *)framebuffer;
-
-  while (1) {
-    for (size_t x = 0; x < width; x++) {
-      for (size_t y = 0; y < height; y++) {
-        size_t raw_pos = x + y * width;
-        if (x & y)
-          fb_pix[raw_pos] = hsv2rgb(p, 1 - ((double)y / (double)height),
-                                    (double)x / (double)width);
+  for (size_t i = 0; i < 2000000; i += 10) {
+    for (int row = 0; row < height; row++) {
+      for (int col = 0; col < width; col++) {
+        double c_re = (col - width / 2.0) * 4.0 / width;
+        double c_im = (row - height / 2.0) * 4.0 / width;
+        double x = 0, y = 0;
+        int iteration = 0;
+        while (x * x + y * y <= 4 && iteration < max) {
+          double x_new = x * x - y * y + c_re;
+          y = 2 * x * y + c_im;
+          x = x_new;
+          iteration++;
+        }
+        if (iteration < max)
+          pix_buf[col + row * width] =
+              hsv2rgb(((double)iteration / (double)max) * i, 1, 1);
+        /* hsv2rgb(((double)col / (double)) * 360, 1, 1); */
+        /* (pixel_t){0, 0, 0, 0}; */
         else
-          fb_pix[raw_pos] = anti_colour(hsv2rgb(
-              p, 1 - ((double)y / (double)height), (double)x / (double)width));
+          framebuffer[col + row * width] = 0;
+        /* pix_buf[col + row * width] =  */
+        /* hsv2rgb(((double)col / (double)row) * 360, 1, 1); */
       }
-      p += 0.0005;
-      if (p > 360.0)
-        p = 0;
     }
   }
 }

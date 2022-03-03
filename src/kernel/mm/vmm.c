@@ -1,4 +1,5 @@
 #include <fb/fb.h>
+#include <fs/vfs.h>
 #include <lock.h>
 #include <mm/kheap.h>
 #include <mm/pmm.h>
@@ -6,8 +7,11 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/syscall.h>
+#include <vec.h>
 
 #define ALIGN_DOWN(__addr, __align) ((__addr) & ~((__align)-1))
+#define ALIGN_UP(__addr, __align) (((__addr) + (__align)-1) & ~((__align)-1))
 
 lock_t vmm_lock = {0};
 pagemap_t kernel_pagemap;
@@ -112,8 +116,8 @@ void vmm_memcpy(pagemap_t *pagemap_1, uintptr_t virtual_address_1,
       (uint8_t *)vmm_virt_to_phys(pagemap_2, aligned_virtual_address_2);
 
   size_t align_difference_1 = virtual_address_1 - aligned_virtual_address_1;
-
   size_t align_difference_2 = virtual_address_2 - aligned_virtual_address_2;
+
   for (size_t i = 0; i < count; i++) {
     *(phys_addr_1 + PHYS_MEM_OFFSET + align_difference_1) =
         *(phys_addr_2 + PHYS_MEM_OFFSET + align_difference_2);
@@ -156,13 +160,48 @@ pagemap_t *vmm_create_new_pagemap() {
   for (uintptr_t i = 256; i < 512; i++)
     user_top[i] = kernel_top[i];
 
-  for (uintptr_t i = 0;
-       i < (uintptr_t)(fb_width * fb_height * sizeof(uint32_t)); i += PAGE_SIZE)
-    vmm_map_page(
-        new_map, vmm_virt_to_phys(&kernel_pagemap, (uintptr_t)framebuffer) + i,
-        vmm_virt_to_phys(&kernel_pagemap, (uintptr_t)framebuffer) + i, 0b111);
+  new_map->ranges.data = kmalloc(sizeof(mmap_range_t));
 
   return new_map;
+}
+
+#include <printf.h>
+
+pagemap_t *vmm_fork_pagemap(pagemap_t *pg) {
+  pagemap_t *new_pg = vmm_create_new_pagemap();
+
+  for (size_t i = 0; i < (size_t)pg->ranges.length; i++) {
+    mmap_range_t *range = pg->ranges.data[i];
+    mmap_range_t *new_range = kmalloc(sizeof(mmap_range_t));
+
+    if (range->flags & MAP_SHARED) {
+      *new_range = *range;
+      for (size_t j = 0; j < range->length; j += PAGE_SIZE)
+        vmm_map_page(new_pg, range->phys_addr + j, range->virt_addr + j,
+                     (range->prot & PROT_WRITE) ? 0b111 : 0b101);
+    } else {
+      if (range->flags & MAP_ANON) {
+        uintptr_t mem = (uintptr_t)pcalloc(range->length / PAGE_SIZE);
+        for (size_t j = 0; j < range->length; j += PAGE_SIZE)
+          vmm_map_page(new_pg, (uintptr_t)mem + j, range->virt_addr + j,
+                       (range->prot & PROT_WRITE) ? 0b111 : 0b101);
+        *new_range = *range;
+        new_range->phys_addr = mem;
+        memcpy((void *)mem, (void *)range->phys_addr, range->length);
+      } else {
+        uintptr_t mem = (uintptr_t)vfs_mmap(
+            range->file->file, new_pg, range->file, (void *)range->virt_addr,
+            range->length, range->offset, range->flags, range->prot);
+
+        *new_range = *range;
+        new_range->phys_addr = mem;
+      }
+    }
+
+    vec_push(&new_pg->ranges, new_range);
+  }
+
+  return new_pg;
 }
 
 int init_vmm() {

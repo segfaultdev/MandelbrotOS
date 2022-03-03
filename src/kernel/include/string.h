@@ -13,6 +13,7 @@ void memmove(void *dest, void *src, size_t n);
 char *strchr(char *s, int c);
 char *strrchr(char *s, int c);
 int memcmp(char *str_1, char *str_2, size_t size);
+char *strdup(char *s1);
 
 void memset(void *buffer, unsigned char value, unsigned long count);
 void memset16(void *buffer, unsigned short value, unsigned long count);

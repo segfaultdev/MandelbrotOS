@@ -2,6 +2,7 @@ global intsyscall
 
 intsyscall:
   int 0x45
+  ; jmp $
   ret
 
 global _start
