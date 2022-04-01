@@ -142,9 +142,8 @@ void ioapic_redirect_irq(uint8_t lapic_id, uint8_t irq, uint8_t vect,
                          int status) {
   for (size_t i = 0; i < (size_t)madt_isos.length; i++) {
     madt_iso_t *iso = madt_isos.data[i];
-    if (iso->irq_source == irq) {
+    if (iso->irq_source == irq)
       ioapic_redirect_gsi(lapic_id, iso->gsi, vect, iso->flags, status);
-    }
   }
   ioapic_redirect_gsi(lapic_id, irq, vect, 0, status);
 }

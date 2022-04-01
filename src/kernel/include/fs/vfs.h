@@ -49,6 +49,8 @@
 #define S_ISREG(n) ((n & S_IFMT) == S_IFREG)
 #define ISDEV(file) (S_ISCHR((file->mode)) || S_ISBLK((file->mode)))
 
+typedef signed long long int ssize_t;
+
 typedef struct stat {
   uint64_t device_id;
   uint16_t file_serial;
@@ -77,7 +79,6 @@ typedef struct dirent {
 
 typedef struct fs_ops {
   char *fs_name;
-  int (*post_mount)(device_t *dev);
   struct fs *(*mount)(device_t *dev);
   struct fs_file *(*open)(struct fs *fs, char *name);
   struct fs_file *(*mkdir)(struct fs *fs, char *path, int mode, int uid,
@@ -89,8 +90,10 @@ typedef struct fs_ops {
 } fs_ops_t;
 
 typedef struct file_ops {
-  int (*read)(struct fs_file *file, uint8_t *buf, size_t offset, size_t count);
-  int (*write)(struct fs_file *file, uint8_t *buf, size_t offset, size_t count);
+  ssize_t (*read)(struct fs_file *file, uint8_t *buf, size_t offset,
+                  size_t count);
+  ssize_t (*write)(struct fs_file *file, uint8_t *buf, size_t offset,
+                   size_t count);
   int (*rmdir)(struct fs_file *file);
   int (*delete)(struct fs_file *file);
   int (*truncate)(struct fs_file *file, size_t size);
@@ -142,8 +145,8 @@ uint64_t vfs_ioctl(fs_file_t *file, uint64_t cmd, void *arg);
 void *vfs_mmap(fs_file_t *file, pagemap_t *pg, syscall_file_t *sfile,
                void *addr, size_t size, size_t offset, int prot, int flags);
 int vfs_mount(char *path, device_t *dev, char *fs_name);
-int vfs_read(fs_file_t *file, uint8_t *buf, size_t offset, size_t count);
-int vfs_write(fs_file_t *file, uint8_t *buf, size_t offset, size_t count);
+ssize_t vfs_read(fs_file_t *file, uint8_t *buf, size_t offset, size_t count);
+ssize_t vfs_write(fs_file_t *file, uint8_t *buf, size_t offset, size_t count);
 int vfs_rmdir(fs_file_t *file);
 int vfs_delete(fs_file_t *file);
 int vfs_truncate(fs_file_t *file, size_t size);

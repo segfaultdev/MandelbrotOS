@@ -4,17 +4,12 @@
 
 /**  Durand's Amazing Super Duper Memory functions.  */
 
-#define VERSION "1.1"
 #define ALIGNMENT                                                              \
-  16ul // 4ul ///< This is the byte alignment that memory must
-       // be allocated on. IMPORTANT for GTK and other stuff.
+  16ul // 4ul				///< This is the byte alignment that memory must be
+       // allocated on. IMPORTANT for GTK and other stuff.
 
-#define ALIGN_TYPE char // /unsigned char[16] /// unsigned short
-#define ALIGN_INFO                                                             \
-  sizeof(ALIGN_TYPE) * 16 // /< Alignment information is stored
-                          // right before the pointer. This is the
-                          // number of bytes of information stored
-                          // there.
+#define ALIGN_TYPE char
+#define ALIGN_INFO sizeof(ALIGN_TYPE) * 16
 
 #define USE_CASE1
 #define USE_CASE2
@@ -58,58 +53,56 @@
  * memory blocks. It details the usage of the memory block.
  */
 struct liballoc_major {
-  struct liballoc_major *prev;  // /< Linked list information.
-  struct liballoc_major *next;  // /< Linked list information.
-  unsigned int pages;           // /< The number of pages in the block.
-  unsigned int size;            // /< The number of pages in the block.
-  unsigned int usage;           // /< The number of bytes used in the block.
-  struct liballoc_minor *first; // /< A pointer to the first allocated memory in
-                                // the block.
+  struct liballoc_major *prev; ///< Linked list information.
+  struct liballoc_major *next; ///< Linked list information.
+  unsigned int pages;          ///< The number of pages in the block.
+  unsigned int size;           ///< The number of pages in the block.
+  unsigned int usage;          ///< The number of bytes used in the block.
+  struct liballoc_minor
+      *first; ///< A pointer to the first allocated memory in the block.
 };
 
 /** This is a structure found at the beginning of all
  * sections in a major block which were allocated by a
- * malloc, calloc, liballoc_realloc call.
+ * malloc, calloc, realloc call.
  */
 struct liballoc_minor {
-  struct liballoc_minor *prev;  // /< Linked list information.
-  struct liballoc_minor *next;  // /< Linked list information.
-  struct liballoc_major *block; // /< The owning block. A pointer to the major
-                                // structure.
-  unsigned int magic;           // /< A magic number to idenfity correctness.
-  unsigned int size;     // /< The size of the memory allocated. Could be 1 byte
-                         // or more.
-  unsigned int req_size; // /< The size of memory requested.
+  struct liballoc_minor *prev; ///< Linked list information.
+  struct liballoc_minor *next; ///< Linked list information.
+  struct liballoc_major
+      *block;         ///< The owning block. A pointer to the major structure.
+  unsigned int magic; ///< A magic number to idenfity correctness.
+  unsigned int
+      size; ///< The size of the memory allocated. Could be 1 byte or more.
+  unsigned int req_size; ///< The size of memory requested.
 };
 
-static struct liballoc_major *l_memRoot = NULL; // /< The root memory block
-                                                // acquired from the system.
-static struct liballoc_major *l_bestBet = NULL; // /< The major with the most
-                                                // free memory.
+static struct liballoc_major *l_memRoot =
+    NULL; ///< The root memory block acquired from the system.
+static struct liballoc_major *l_bestBet =
+    NULL; ///< The major with the most free memory.
 
-static unsigned int l_pageSize = 4096; // /< The size of an individual page. Set
-                                       // up in liballoc_init.
-static unsigned int l_pageCount = 16;  // /< The number of pages to request per
-                                       // chunk. Set up in liballoc_init.
+static unsigned int l_pageSize =
+    4096; ///< The size of an individual page. Set up in liballoc_init.
+static unsigned int l_pageCount =
+    16; ///< The number of pages to request per chunk. Set up in liballoc_init.
 static unsigned long long l_allocated =
-    0;                                 // /< Running total of allocated memory.
-static unsigned long long l_inuse = 0; // /< Running total of used memory.
+    0;                                 ///< Running total of allocated memory.
+static unsigned long long l_inuse = 0; ///< Running total of used memory.
 
-static long long l_warningCount = 0;     // /< Number of warnings encountered
-static long long l_errorCount = 0;       // /< Number of actual errors
-static long long l_possibleOverruns = 0; // /< Number of possible overruns
+static long long l_warningCount = 0;     ///< Number of warnings encountered
+static long long l_errorCount = 0;       ///< Number of actual errors
+static long long l_possibleOverruns = 0; ///< Number of possible overruns
 
-// *********** HELPER FUNCTIONS *******************************
+// ***********   HELPER FUNCTIONS  *******************************
 
 static void *liballoc_memset(void *s, int c, size_t n) {
   unsigned int i;
-
   for (i = 0; i < n; i++)
     ((char *)s)[i] = c;
 
   return s;
 }
-
 static void *liballoc_memcpy(void *s1, const void *s2, size_t n) {
   char *cdest;
   char *csrc;
@@ -185,7 +178,7 @@ static struct liballoc_major *allocate_new_page(unsigned int size) {
   if (st < l_pageCount)
     st = l_pageCount;
 
-  maj = (struct liballoc_major *)liballoc_alloc(st);
+  maj = (struct liballoc_major *)liballoc_alloc_pages(st);
 
   if (maj == NULL) {
     l_warningCount += 1;
@@ -275,7 +268,7 @@ void *liballoc_malloc(size_t req_size) {
   }
 
 #ifdef DEBUG
-  printf("liballoc: %x liballoc_malloc( %i ): ", __builtin_return_address(0),
+  printf("liballoc: %x PREFIX(malloc)( %i ): ", __builtin_return_address(0),
          size);
   FLUSH();
 #endif
@@ -307,7 +300,7 @@ void *liballoc_malloc(size_t req_size) {
 
 #ifdef USE_CASE1
 
-    // CASE 1: There is not enough space in this major block.
+    // CASE 1:  There is not enough space in this major block.
     if (diff < (size + sizeof(struct liballoc_minor))) {
 #ifdef DEBUG
       printf("CASE 1: Insufficient space in block %x\n", maj);
@@ -514,7 +507,7 @@ void *liballoc_malloc(size_t req_size) {
       // we've run out. we need more...
       maj->next = allocate_new_page(size); // next one guaranteed to be okay
       if (maj->next == NULL)
-        break; // uh oh, no more memory.....
+        break; //  uh oh,  no more memory.....
       maj->next->prev = maj;
     }
 
@@ -530,7 +523,7 @@ void *liballoc_malloc(size_t req_size) {
   FLUSH();
 #endif
 #if defined DEBUG || defined INFO
-  printf("liballoc: WARNING: liballoc_malloc( %i ) returning NULL.\n", size);
+  printf("liballoc: WARNING: PREFIX(malloc)( %i ) returning NULL.\n", size);
   liballoc_dump();
   FLUSH();
 #endif
@@ -544,7 +537,7 @@ void liballoc_free(void *ptr) {
   if (ptr == NULL) {
     l_warningCount += 1;
 #if defined DEBUG || defined INFO
-    printf("liballoc: WARNING: free( NULL ) called from %x\n",
+    printf("liballoc: WARNING: PREFIX(free)( NULL ) called from %x\n",
            __builtin_return_address(0));
     FLUSH();
 #endif
@@ -575,13 +568,14 @@ void liballoc_free(void *ptr) {
 
     if (min->magic == LIBALLOC_DEAD) {
 #if defined DEBUG || defined INFO
-      printf("liballoc: ERROR: multiple free() attempt on %x from %x.\n", ptr,
-             __builtin_return_address(0));
+      printf(
+          "liballoc: ERROR: multiple PREFIX(free)() attempt on %x from %x.\n",
+          ptr, __builtin_return_address(0));
       FLUSH();
 #endif
     } else {
 #if defined DEBUG || defined INFO
-      printf("liballoc: ERROR: Bad free( %x ) called from %x\n", ptr,
+      printf("liballoc: ERROR: Bad PREFIX(free)( %x ) called from %x\n", ptr,
              __builtin_return_address(0));
       FLUSH();
 #endif
@@ -593,7 +587,7 @@ void liballoc_free(void *ptr) {
   }
 
 #ifdef DEBUG
-  printf("liballoc: %x free( %x ): ", __builtin_return_address(0), ptr);
+  printf("liballoc: %x PREFIX(free)( %x ): ", __builtin_return_address(0), ptr);
   FLUSH();
 #endif
 
@@ -628,7 +622,7 @@ void liballoc_free(void *ptr) {
       maj->next->prev = maj->prev;
     l_allocated -= maj->size;
 
-    liballoc_free_(maj, maj->pages);
+    liballoc_free_pages(maj, maj->pages);
   } else {
     if (l_bestBet != NULL) {
       int bestSize = l_bestBet->size - l_bestBet->usage;
@@ -702,13 +696,14 @@ void *liballoc_realloc(void *p, size_t size) {
 
     if (min->magic == LIBALLOC_DEAD) {
 #if defined DEBUG || defined INFO
-      printf("liballoc: ERROR: multiple free() attempt on %x from %x.\n", ptr,
-             __builtin_return_address(0));
+      printf(
+          "liballoc: ERROR: multiple PREFIX(free)() attempt on %x from %x.\n",
+          ptr, __builtin_return_address(0));
       FLUSH();
 #endif
     } else {
 #if defined DEBUG || defined INFO
-      printf("liballoc: ERROR: Bad free( %x ) called from %x\n", ptr,
+      printf("liballoc: ERROR: Bad PREFIX(free)( %x ) called from %x\n", ptr,
              __builtin_return_address(0));
       FLUSH();
 #endif
@@ -716,7 +711,7 @@ void *liballoc_realloc(void *p, size_t size) {
 
     // being lied to...
     liballoc_unlock(); // release the lock
-    /* return NULL; */
+    return NULL;
   }
 
   // Definitely a memory block.
@@ -731,7 +726,7 @@ void *liballoc_realloc(void *p, size_t size) {
 
   liballoc_unlock();
 
-  // If we got here then we're liballoc_reallocating to a block bigger than us.
+  // If we got here then we're reallocating to a block bigger than us.
   ptr = liballoc_malloc(size); // We need to allocate new memory
   liballoc_memcpy(ptr, p, real_size);
   liballoc_free(p);

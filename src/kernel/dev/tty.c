@@ -1,28 +1,30 @@
 #include <dev/device.h>
 #include <dev/tty.h>
+#include <drivers/ps2.h>
 #include <fb/fb.h>
 #include <fs/vfs.h>
 #include <lock.h>
 #include <mm/kheap.h>
 #include <printf.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 
-uint8_t tty_write(device_t *dev, size_t start, size_t count, uint8_t *buf) {
+ssize_t tty_write(device_t *dev, size_t start, size_t count, uint8_t *buf) {
   (void)start;
   (void)dev;
   for (size_t i = 0; i < count; i++)
     putchar(buf[i]);
-  return 0;
+  return count;
 }
 
-uint8_t tty_read(device_t *dev, size_t start, size_t count, uint8_t *buf) {
+ssize_t tty_read(device_t *dev, size_t start, size_t count, uint8_t *buf) {
   (void)dev;
   (void)start;
-  (void)count;
   (void)buf;
-  return 1; // TODO: Dya think it might be cool to maybe not just return 1 and
-            // like, read from the keyboard
+  for (size_t i = 0; i < count; i++)
+    buf[i] = getchar();
+  return count;
 }
 
 static device_t tty0 = (device_t){

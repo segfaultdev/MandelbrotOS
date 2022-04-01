@@ -15,13 +15,12 @@
 
 lock_t liballoc_slock = {0};
 
-void *liballoc_alloc(int size) {
-  return (void *)((uintptr_t)pcalloc(ROUND_UP(size, PAGE_SIZE)) +
-                  PHYS_MEM_OFFSET);
+void *liballoc_alloc_pages(int size) {
+  return (void *)((uintptr_t)pcalloc(size) + PHYS_MEM_OFFSET);
 }
 
-int liballoc_free_(void *ptr, int pages) {
-  pmm_free_pages(ptr - PHYS_MEM_OFFSET, pages + 1);
+int liballoc_free_pages(void *ptr, size_t pages) {
+  pmm_free_pages((void *)((uintptr_t)ptr - PHYS_MEM_OFFSET), pages);
   return 0;
 }
 
@@ -38,8 +37,4 @@ void kfree(void *ptr) { liballoc_free(ptr); }
 
 void *krealloc(void *ptr, size_t size) { return liballoc_realloc(ptr, size); }
 
-void *kcalloc(size_t size) {
-  void *ptr = liballoc_malloc(size);
-  memset(ptr, 0, size);
-  return ptr;
-}
+void *kcalloc(size_t size) { return liballoc_calloc(size, 1); }

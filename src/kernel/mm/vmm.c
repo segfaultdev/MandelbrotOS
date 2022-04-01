@@ -152,10 +152,8 @@ pagemap_t *vmm_create_new_pagemap() {
   pagemap_t *new_map = kcalloc(sizeof(pagemap_t));
   new_map->top_level = pcalloc(1);
 
-  uint64_t *kernel_top =
-      (uint64_t *)((void *)kernel_pagemap.top_level + PHYS_MEM_OFFSET);
-  uint64_t *user_top =
-      (uint64_t *)((void *)new_map->top_level + PHYS_MEM_OFFSET);
+  uint64_t *kernel_top = (uint64_t *)((void *)kernel_pagemap.top_level);
+  uint64_t *user_top = (uint64_t *)((void *)new_map->top_level);
 
   for (uintptr_t i = 256; i < 512; i++)
     user_top[i] = kernel_top[i];

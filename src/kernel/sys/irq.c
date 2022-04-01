@@ -5,6 +5,8 @@
 #include <sys/idt.h>
 #include <sys/irq.h>
 
+static volatile lock_t irq_lock = {0};
+
 static void (*irq_routines[16])(uint64_t rsp) = {0};
 
 extern void pit_handler();
@@ -27,21 +29,22 @@ extern void irq14();
 extern void irq15();
 extern void schedule_irq();
 
-static void pic_remap(void) {
-  outb(0x20, 0x11);
-  outb(0xA0, 0x11);
-  outb(0x21, 0x20);
-  outb(0xA1, 0x28);
-  outb(0x21, 0x04);
-  outb(0xA1, 0x02);
-  outb(0x21, 0x01);
-  outb(0xA1, 0x01);
-  outb(0x21, 0x0);
-  outb(0xA1, 0x0);
-}
+/* static void pic_remap(void) { */
+  /* outb(0x20, 0x11); */
+  /* outb(0xA0, 0x11); */
+  /* outb(0x21, 0x20); */
+  /* outb(0xA1, 0x28); */
+  /* outb(0x21, 0x04); */
+  /* outb(0xA1, 0x02); */
+  /* outb(0x21, 0x01); */
+  /* outb(0xA1, 0x01); */
+  /* outb(0x21, 0x0); */
+  /* outb(0xA1, 0x0); */
+/* } */
 
 int init_irq() {
-  pic_remap();
+  /* pic_remap(); */
+  LOCK(irq_lock);
 
   idt_set_gate(&idt[32 + 0], 1, 0, irq0);
   idt_set_gate(&idt[32 + 1], 1, 0, irq1);
@@ -61,31 +64,37 @@ int init_irq() {
   idt_set_gate(&idt[32 + 15], 1, 0, irq15);
   idt_set_gate(&idt[32 + 16], 1, 0, schedule_irq);
 
+  UNLOCK(irq_lock);
+
   return 0;
 }
 
-void irq_install_handler(int irq, void (*handler)()) {
-  MAKE_LOCK(irq_install_lock);
+void irq_install_handler(int irq, void (*handler)(uint64_t rsp)) {
+  LOCK(irq_lock);
   irq_routines[irq] = handler;
-  UNLOCK(irq_install_lock);
+  UNLOCK(irq_lock);
 }
 
 void irq_uninstall_handler(int irq) {
-  MAKE_LOCK(irq_uninstall_lock);
+  LOCK(irq_lock);
   irq_routines[irq] = 0;
-  UNLOCK(irq_uninstall_lock);
+  UNLOCK(irq_lock);
 }
 
 void c_irq_handler(uint64_t irqno, uint64_t rsp) {
+  /* LOCK(irq_lock); */
+
   void (*handler)() = irq_routines[irqno];
 
   if (handler)
     handler(rsp);
 
-  if (irqno >= 8)
-    outb(0xA0, 0x20);
+  /* if (irqno >= 8) */
+    /* outb(0xA0, 0x20); */
 
-  outb(0x20, 0x20);
+  /* outb(0x20, 0x20); */
 
   lapic_eoi();
+
+  /* UNLOCK(irq_lock); */
 }

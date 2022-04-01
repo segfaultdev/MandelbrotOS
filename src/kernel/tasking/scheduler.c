@@ -26,7 +26,10 @@
 #define STACK_SIZE 0x20000
 #define INITIAL_HEAP_SIZE 0x4000
 
+proc_t *kernel_proc;
+
 size_t cpu_count;
+size_t working_cpus = 0;
 
 static volatile int sched_started = 0;
 
@@ -51,10 +54,6 @@ void sched_enqueue_thread(thread_t *thread) {
   vec_push(&threads, thread);
   vec_push(&thread->mother_proc->threads, thread);
   thread->enqueued = 1;
-
-  for (size_t i = 0; i < cpu_count; i++)
-    if (LOCKED_READ(cpu_locals[i].is_idle))
-      lapic_send_ipi(cpu_locals[i].lapic_id, SCHEDULE_REG);
 
   UNLOCK(sched_lock);
 }
@@ -184,14 +183,10 @@ static size_t get_next_thread(size_t orig_i) {
 }
 
 void schedule(uint64_t rsp) {
-  vmm_load_pagemap(&kernel_pagemap);
-
   lapic_timer_stop();
 
   cpu_locals_t *locals = get_locals();
   thread_t *current_thread = locals->current_thread;
-
-  locals->is_idle = 0;
 
   if (!LOCK_ACQUIRE(sched_lock)) {
     lapic_eoi();
@@ -217,17 +212,9 @@ void schedule(uint64_t rsp) {
   }
 
   if (new_index == (size_t)-1) {
-    locals->current_thread = NULL;
-    locals->last_run_thread_index = 0;
-    locals->is_idle = 1;
-
     lapic_eoi();
-
     UNLOCK(sched_lock);
-
-    asm volatile("hlt");
-    while (1)
-      ;
+    await();
   }
 
   current_thread = LOCKED_READ(threads.data[new_index]);
@@ -244,9 +231,9 @@ void schedule(uint64_t rsp) {
   lapic_eoi();
   lapic_timer_oneshot(SCHEDULE_REG, current_thread->time_slice);
 
-  UNLOCK(sched_lock);
-
   vmm_load_pagemap(current_thread->mother_proc->pagemap);
+
+  UNLOCK(sched_lock);
 
   switch_and_run_stack((uintptr_t)&current_thread->registers);
 }
@@ -370,31 +357,7 @@ size_t sched_fork(registers_t *regs) {
   }
 
   *new_thread = (thread_t){
-      .registers =
-          (registers_t){
-              .r15 = regs->r15,
-              .r14 = regs->r14,
-              .r13 = regs->r13,
-              .r12 = regs->r12,
-              .r11 = regs->r11,
-              .r10 = regs->r10,
-              .r9 = regs->r9,
-              .r8 = regs->r8,
-              .rbp = regs->rbp,
-              .rdi = regs->rdi,
-              .rsi = regs->rsi,
-              .rdx = regs->rdx,
-              .rcx = regs->rcx,
-              .rbx = regs->rbx,
-              .rax = 0,
-              .reserved1 = SCHEDULE_REG,
-              .reserved2 = 0,
-              .rip = regs->rip,
-              .cs = regs->cs,
-              .rflags = regs->rflags,
-              .rsp = regs->rsp,
-              .ss = regs->ss,
-          },
+      .registers = *regs,
       .mother_proc = new_proc,
       .time_slice = orig_thread->time_slice,
       .kernel_stack = (uintptr_t)pcalloc(STACK_SIZE / PAGE_SIZE) + STACK_SIZE +
@@ -404,6 +367,8 @@ size_t sched_fork(registers_t *regs) {
       .tid = current_tid++,
       .enqueued = 0,
   };
+
+  new_thread->registers.rax = 0;
 
   memcpy(new_thread->fpu_storage, orig_thread->fpu_storage, 512);
   memcpy((void *)new_thread->kernel_stack - STACK_SIZE,
@@ -421,7 +386,7 @@ void scheduler_init(uintptr_t addr, struct stivale2_struct_tag_smp *smp_info) {
   processes.data = kcalloc(sizeof(proc_t *));
   threads.data = kcalloc(sizeof(thread_t *));
 
-  proc_t *kernel_proc = sched_create_proc("k_proc", 0);
+  kernel_proc = sched_create_proc("k_proc", 0);
 
   sched_create_thread("k_init", addr, STANDARD_TIME_SLICE, 0, 1, kernel_proc, 0,
                       0, 0);

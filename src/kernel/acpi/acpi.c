@@ -60,6 +60,8 @@ void *acpi_get_table(char *signature, int index) {
   return NULL;
 }
 
+#include <printf.h>
+
 void acpi_gather_madt() {
   madt = acpi_get_table("APIC", 0);
 
@@ -85,15 +87,18 @@ void acpi_gather_madt() {
         vec_push(&madt_ioapics, (madt_ioapic_t *)header);
         break;
       case 2:
-        vec_push(&madt_nmis, (madt_nmi_t *)header);
-        break;
-      case 3:
         vec_push(&madt_isos, (madt_iso_t *)header);
+        break;
+      case 4:
+        vec_push(&madt_nmis, (madt_nmi_t *)header);
         break;
     }
 
     i += header->length;
   }
+
+  /* for (size_t i = 0; i < (size_t)madt_isos.length; i++) */
+  /* printf("ISO: Source %lu\r\n", madt_isos.data[i]->irq_source); */
 }
 
 int init_acpi(struct stivale2_struct_tag_rsdp *rsdp_info) {

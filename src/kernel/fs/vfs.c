@@ -102,14 +102,14 @@ int vfs_mount(char *path, device_t *dev, char *fs_name) {
 
 void vfs_register_fs(fs_ops_t *ops) { vec_push(&registered_fses, ops); }
 
-int vfs_read(fs_file_t *file, uint8_t *buf, size_t offset, size_t count) {
+ssize_t vfs_read(fs_file_t *file, uint8_t *buf, size_t offset, size_t count) {
   if (ISDEV(file))
     return device_read(file->dev, offset, count, buf);
   else
     return file->file_ops->read(file, buf, offset, count);
 }
 
-int vfs_write(fs_file_t *file, uint8_t *buf, size_t offset, size_t count) {
+ssize_t vfs_write(fs_file_t *file, uint8_t *buf, size_t offset, size_t count) {
   if (ISDEV(file))
     return device_write(file->dev, offset, count, buf);
   else

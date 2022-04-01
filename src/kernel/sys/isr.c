@@ -1,7 +1,9 @@
 #include <cpu_locals.h>
 #include <drivers/serial.h>
+#include <mm/vmm.h>
 #include <printf.h>
 #include <registers.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <sys/idt.h>
 #include <sys/isr.h>
@@ -117,6 +119,16 @@ void c_isr_handler(uint64_t ex_no, uint64_t rsp) {
 
   printf("\r\nCPU %lu: %s at %lx\r\n", get_locals()->cpu_number,
          exception_messages[ex_no], ((registers_t *)rsp)->rip);
+
+  printf("Stack trace:\r\n%lx\r\n", ((registers_t *)rsp)->rip);
+  uint64_t rbp = ((registers_t *)rsp)->rbp;
+  while (rbp) {
+    uint64_t rip = ((uint64_t *)(vmm_get_kernel_address(
+        get_locals()->current_thread->mother_proc->pagemap, rbp)))[1];
+    printf("%lx\r\n", rip);
+    rbp = *((uint64_t *)(vmm_get_kernel_address(
+        get_locals()->current_thread->mother_proc->pagemap, rbp)));
+  }
 
   while (1)
     asm volatile("cli\n"

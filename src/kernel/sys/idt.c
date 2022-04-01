@@ -12,13 +12,16 @@ void idt_set_gate(idt_entry_t *entry, int user_space, int exception,
   entry->base_high = (uint32_t)((uint64_t)(func) >> 32);
   entry->sel = GDT_SEG_KCODE;
 
-  if (exception)
-    entry->flags =
-        (user_space) ? 0xef : 0x8f; // Present, trap and DPL 3 or 0 respectively
-  else
-    entry->flags = (user_space)
-                       ? 0xee
-                       : 0x8e; // Present, interrupt and DPL 3 or 0 respectively
+  /* if (exception) */
+    /* entry->flags = */
+        /* (user_space) ? 0xef : 0x8f; // Present, trap and DPL 3 or 0 respectively */
+  /* else */
+    /* entry->flags = (user_space) */
+                       /* ? 0xee */
+                       /* : 0x8e; // Present, interrupt and DPL 3 or 0 respectively */
+  entry->flags = 0xee;
+  (void)user_space;
+  (void)exception;
 }
 
 void load_idt() { asm volatile("lidt %0" : : "m"(idtp)); }

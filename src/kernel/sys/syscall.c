@@ -44,11 +44,6 @@ size_t syscall_open(char *path) {
   if (!file)
     return (size_t)-1;
 
-  if (S_ISDIR(file->mode)) {
-    vfs_close(file);
-    return -1;
-  }
-
   syscall_file_t *sfile = kmalloc(sizeof(syscall_file_t));
   *sfile = (syscall_file_t){
       .file = file,
@@ -57,7 +52,7 @@ size_t syscall_open(char *path) {
       .fd = CURRENT_PROC->last_fd++,
       .is_buffered = 1,
   };
-
+  
   vec_push(&CURRENT_PROC->fds, sfile);
 
   return (size_t)sfile->fd;
@@ -71,66 +66,86 @@ void syscall_close(size_t id) {
   if (!file)
     return;
 
-  if (file->is_buffered && file->dirty)
+  if (file->is_buffered && file->dirty) {
     vfs_write(file->file, file->buf, 0, file->file->length);
+    kfree(file->buf);
+  }
 
-  kfree(file->buf);
   vfs_close(file->file);
 }
 
-void syscall_read(size_t id, uint8_t *buffer, size_t offset, size_t size) {
+ssize_t syscall_read(size_t id, uint8_t *buffer, size_t offset, size_t size) {
   syscall_file_t *file = NULL;
   for (size_t i = 0; i < (size_t)CURRENT_PROC->fds.length; i++)
     if (CURRENT_PROC->fds.data[i]->fd == id)
       file = CURRENT_PROC->fds.data[i];
   if (!file)
-    return;
+    return 0;
 
-  if (file->is_buffered)
+  if (size + offset > file->file->length && !ISDEV(file->file))
+    size = file->file->length - offset;
+
+  if (file->is_buffered && !ISDEV(file->file)) {
     vmm_memcpy(CURRENT_PAGEMAP, (uintptr_t)buffer, &kernel_pagemap,
                (uintptr_t)(file->buf + offset), file->file->length);
-  else
-    vfs_read(file->file, buffer, offset, size);
+    return size;
+  } else
+    return vfs_read(
+        file->file,
+        (uint8_t *)vmm_get_kernel_address(CURRENT_PAGEMAP, (uintptr_t)buffer),
+        offset, size);
 }
 
-void syscall_write(size_t id, uint8_t *buffer, size_t offset, size_t size) {
+ssize_t syscall_write(size_t id, uint8_t *buffer, size_t offset, size_t size) {
   syscall_file_t *file = NULL;
   for (size_t i = 0; i < (size_t)CURRENT_PROC->fds.length; i++)
     if (CURRENT_PROC->fds.data[i]->fd == id)
       file = CURRENT_PROC->fds.data[i];
   if (!file)
-    return;
+    return 0;
 
-  if (file->is_buffered) {
+  if (file->is_buffered && !ISDEV(file->file)) {
     file->dirty = 1;
 
-    if (size > file->file->length - offset)
+    if (size > file->file->length - offset && ISDEV(file->file))
       file->buf = krealloc(file->buf, size + offset);
 
     vmm_memcpy(
         &kernel_pagemap, (uintptr_t)(file->buf + offset), CURRENT_PAGEMAP,
         (uintptr_t)vmm_get_kernel_address(CURRENT_PAGEMAP, (uintptr_t)buffer),
         size);
+
+    return size;
   } else
-    vfs_write(
+    return vfs_write(
         file->file,
         (uint8_t *)vmm_get_kernel_address(CURRENT_PAGEMAP, (uintptr_t)buffer),
         offset, size);
+  return 0;
 }
 
-int syscall_execve(char *name, char *path, char *argv, char *env) {
-  uintptr_t name_kern_addr =
-      vmm_get_kernel_address(CURRENT_PAGEMAP, (uintptr_t)name);
+int syscall_execve(char *path, char **argv, char **env) {
   uintptr_t path_kern_addr =
       vmm_get_kernel_address(CURRENT_PAGEMAP, (uintptr_t)path);
 
-  uintptr_t kargv = vmm_get_kernel_address(CURRENT_PAGEMAP, (uintptr_t)argv);
-  uintptr_t kenv = vmm_get_kernel_address(CURRENT_PAGEMAP, (uintptr_t)env);
+  char **uargv =
+      (void *)vmm_get_kernel_address(CURRENT_PAGEMAP, (uintptr_t)argv);
+  char **uenv = (void *)vmm_get_kernel_address(CURRENT_PAGEMAP, (uintptr_t)env);
 
-  proc_t *new_proc = sched_create_proc((char *)name_kern_addr, 1);
+  size_t argc = 0;
+  size_t envc = 0;
 
-  if (elf_run_binary((char *)name_kern_addr, (char *)path_kern_addr, new_proc,
-                     STANDARD_TIME_SLICE, kargv, kenv, 0))
+  while (uargv[argc])
+    argc++;
+  while (uenv[envc])
+    envc++;
+
+  proc_t *new_proc = sched_create_proc((char *)"benis", 1);
+
+  if (elf_run_binary(
+          (char *)"benis", (char *)path_kern_addr, new_proc,
+          /* STANDARD_TIME_SLICE, (uintptr_t)kargv, (uintptr_t)kenv, 0)) */
+          STANDARD_TIME_SLICE, (uintptr_t)0, (uintptr_t)0, 0))
     return 1;
 
   sched_destroy_proc(CURRENT_PROC);
@@ -285,16 +300,16 @@ uint64_t c_syscall_handler(uint64_t rsp) {
       syscall_close((size_t)registers->rsi);
       break;
     case SYSCALL_READ:
-      syscall_read(registers->rsi, (uint8_t *)registers->rdx, registers->rcx,
-                   registers->r8);
+      ret = syscall_read(registers->rsi, (uint8_t *)registers->rdx,
+                         registers->rcx, registers->r8);
       break;
     case SYSCALL_WRITE:
-      syscall_write(registers->rsi, (uint8_t *)registers->rdx, registers->rcx,
-                    registers->r8);
+      ret = syscall_write(registers->rsi, (uint8_t *)registers->rdx,
+                          registers->rcx, registers->r8);
       break;
     case SYSCALL_EXEC:
-      ret = syscall_execve((char *)registers->rsi, (char *)registers->rdx,
-                           (char *)registers->rcx, (char *)registers->r8);
+      ret = syscall_execve((char *)registers->rsi, (char **)registers->rdx,
+                           (char **)registers->rcx);
       break;
     case SYSCALL_MMAP:
       ret = (uint64_t)syscall_mmap((mmap_args_t *)registers->rsi);

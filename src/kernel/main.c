@@ -3,13 +3,14 @@
 #include <cpu_locals.h>
 #include <dev/device.h>
 #include <dev/fbdev.h>
+#include <dev/mousedev.h>
 #include <dev/tty.h>
 #include <drivers/ahci.h>
 #include <drivers/apic.h>
-#include <drivers/kbd.h>
 #include <drivers/mbr.h>
 #include <drivers/pcspkr.h>
 #include <drivers/pit.h>
+#include <drivers/ps2.h>
 #include <drivers/rtc.h>
 #include <drivers/serial.h>
 #include <elf.h>
@@ -53,20 +54,22 @@ void k_thread() {
   klog(3, "Scheduler started and running\r\n");
   klog_init(init_rtc(), "Real time clock");
   klog_init(init_serial(), "Serial");
-  klog_init(init_kbd(), "Keyboard");
   klog_init(pci_enumerate(), "PCI");
   klog_init(init_pit(), "PIT");
   klog_init(init_pcspkr(), "PC speaker");
   klog_init(init_sata(), "SATA");
+  klog_init(init_ps2(), "PS2");
   klog_init(init_vfs(), "Virtual filesystem");
   klog_init(init_tmpfs(), "TMPFS");
+  klog_init(init_devfs(), "DEVFS");
   klog_init(init_fat(), "FAT32");
 
   vfs_mount("/", device_get(0), "FAT32");
-  vfs_mount("/dev/", NULL, "TMPFS");
+  vfs_mount("/dev/", NULL, "DEVFS");
 
   klog_init(init_tty("/dev"), "TTY0");
   klog_init(init_fbdev("/dev"), "Framebuffer device");
+  klog_init(init_mousedev("/dev"), "Mouse device");
 
   fs_file_t *tty0 = vfs_open("/dev/tty0");
 
@@ -83,7 +86,7 @@ void k_thread() {
   vec_push(&user_proc->fds, fil);
   user_proc->last_fd = 2;
 
-  elf_run_binary("sin", "/prog/mandelbrot", user_proc, 5000, 0, 0, 0);
+  elf_run_binary("mandelbrot", "/prog/mandelbrot", user_proc, 5000, 0, 0, 0);
 
   while (1)
     ;

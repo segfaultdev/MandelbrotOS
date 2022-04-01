@@ -382,7 +382,7 @@ uint32_t fat_find(device_t *dev, uint32_t directory,
           if (parent_cluster)
             *parent_cluster = *cluster;
           if (index)
-            *index = i;
+            *index = i + 1;
 
           *parent_cluster_dir = directory;
         }
@@ -517,7 +517,7 @@ int fat_truncate(fs_file_t *file, size_t size) {
   return 0;
 }
 
-int fat_read(fs_file_t *file, uint8_t *buf, size_t offset, size_t count) {
+ssize_t fat_read(fs_file_t *file, uint8_t *buf, size_t offset, size_t count) {
   datetime_t time = rtc_get_datetime();
   time.year += 1900;
 
@@ -532,12 +532,12 @@ int fat_read(fs_file_t *file, uint8_t *buf, size_t offset, size_t count) {
 
   fat_set_dir_entry(file->fs->dev, dir, index, entry);
 
-  if (!count)
-    return 1;
   if (entry.directory)
-    return 1;
+    return 0;
   if (entry.size < offset + count)
-    return 1;
+    count = entry.size - offset;
+  if (!count)
+    return 0;
 
   uint8_t *file_buffer = kmalloc(entry.size);
   fat_read_cluster_chain(
@@ -548,10 +548,10 @@ int fat_read(fs_file_t *file, uint8_t *buf, size_t offset, size_t count) {
 
   kfree(file_buffer);
 
-  return 0;
+  return count;
 }
 
-int fat_write(fs_file_t *file, uint8_t *buf, size_t offset, size_t count) {
+ssize_t fat_write(fs_file_t *file, uint8_t *buf, size_t offset, size_t count) {
   datetime_t time = rtc_get_datetime();
 
   size_t index = ((fat_file_private_info_t *)file->private_data)->index;
@@ -561,17 +561,14 @@ int fat_write(fs_file_t *file, uint8_t *buf, size_t offset, size_t count) {
       ((fat_file_private_info_t *)file->private_data)->cluster;
   dir_entry_t entry = ((fat_file_private_info_t *)file->private_data)->dir;
 
-  if (entry.read_only)
-    return 1;
-
   entry.accessed_day = time.day;
   entry.accessed_month = time.month;
   entry.accessed_year = time.year - 1980;
 
   if (!count)
-    return 1;
+    return 0;
   if (entry.directory)
-    return 1;
+    return 0;
 
   while (
       count + offset >
@@ -618,7 +615,7 @@ int fat_write(fs_file_t *file, uint8_t *buf, size_t offset, size_t count) {
 
   kfree(file_buffer);
 
-  return 0;
+  return count;
 }
 
 int fat_readdir(fs_file_t *file, dirent_t *dirent, size_t pos) {
@@ -763,7 +760,9 @@ fs_file_t *fat_open(fs_t *fs, char *path) {
       .length = priv->dir.size,
       .inode = priv->cluster,
       .private_data = (void *)priv,
-      .mode = 0777 | ((priv->dir.directory) ? S_IFDIR : S_IFREG),
+      .mode = S_IREAD | S_IRGRP | S_IRUSR |
+              ((priv->dir.directory) ? S_IFDIR : S_IFREG) |
+              ((!priv->dir.read_only) ? S_IWRITE | S_IWUSR | S_IWGRP : 0),
 
       .last_access_time =
           rtc_mktime((datetime_t){.day = priv->dir.accessed_day,
@@ -1286,15 +1285,14 @@ fs_t *fat_mount(device_t *dev) {
 
 fs_ops_t fat_fs_ops = (fs_ops_t){
     .create = fat_create,
-    .fs_name = "FAT32",
     .mkdir = fat_mkdir,
     .mount = fat_mount,
     .open = fat_open,
     .mknod = fat_mknod,
-    .post_mount = NULL, // FAT doesn't need any post_mount stuff for now
 };
 
 int init_fat() {
+  fat_fs_ops.fs_name = strdup("FAT32");
   vfs_register_fs(&fat_fs_ops);
   return 0;
 }

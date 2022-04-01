@@ -97,12 +97,15 @@ int tmpfs_close(fs_file_t *file) {
   return 0;
 }
 
-int tmpfs_read(fs_file_t *file, uint8_t *buf, size_t offset, size_t count) {
+ssize_t tmpfs_read(fs_file_t *file, uint8_t *buf, size_t offset, size_t count) {
+  if (count + offset > file->length)
+    count = file->length - offset;
   memcpy((void *)buf, file->private_data + offset, count);
-  return 0;
+  return offset;
 }
 
-int tmpfs_write(fs_file_t *file, uint8_t *buf, size_t offset, size_t count) {
+ssize_t tmpfs_write(fs_file_t *file, uint8_t *buf, size_t offset,
+                    size_t count) {
   if (count + offset > file->length) {
     file->private_data = krealloc(file->private_data, count + offset);
     file->length = count + offset;
@@ -110,7 +113,7 @@ int tmpfs_write(fs_file_t *file, uint8_t *buf, size_t offset, size_t count) {
 
   memcpy(file->private_data + offset, buf, count);
 
-  return 0;
+  return count;
 }
 
 int tmpfs_rmdir(fs_file_t *file) {
@@ -341,7 +344,8 @@ fs_t *tmpfs_mount(device_t *dev) {
       .length = 0,
       .inode = (uint64_t)file,
       .private_data = kmalloc(sizeof(tmpfs_dirent_t)),
-      .mode = S_IFDIR | 0777,
+      .mode =
+          S_IFDIR | S_IREAD | S_IRGRP | S_IRUSR | S_IWRITE | S_IWGRP | S_IWUSR,
 
       .last_access_time = tim,
       .last_modification_time = tim,
@@ -368,15 +372,14 @@ fs_t *tmpfs_mount(device_t *dev) {
 
 fs_ops_t tmpfs_fs_ops = (fs_ops_t){
     .create = tmpfs_create,
-    .fs_name = "TMPFS",
     .mkdir = tmpfs_mkdir,
     .mount = tmpfs_mount,
     .open = tmpfs_open,
     .mknod = tmpfs_mknod,
-    .post_mount = NULL, // Tf is a post mount :))))))
 };
 
 int init_tmpfs() {
+  tmpfs_fs_ops.fs_name = strdup("TMPFS");
   vfs_register_fs(&tmpfs_fs_ops);
   return 0;
 }

@@ -31,9 +31,8 @@ void smp_init_cpu(struct stivale2_smp_info *smp_info) {
   set_and_load_tss((uintptr_t)&locals->tss);
 
   locals->last_run_thread_index = 0;
-  locals->lapic_id = smp_info->lapic_id;
   locals->current_thread = NULL;
-  locals->is_idle = 0;
+  locals->lapic_id = smp_info->lapic_id;
 
   set_locals(locals);
 

@@ -26,7 +26,7 @@ device_t *device_get_by_id(uint32_t id) {
   return NULL;
 }
 
-uint8_t device_read(device_t *dev, size_t start, size_t count, uint8_t *buf) {
+ssize_t device_read(device_t *dev, size_t start, size_t count, uint8_t *buf) {
   if (S_ISBLK(dev->type)) {
     if (start % dev->block_size) {
       uint8_t *nbuf = kmalloc(dev->block_size);
@@ -76,7 +76,7 @@ uint8_t device_read(device_t *dev, size_t start, size_t count, uint8_t *buf) {
   return 1;
 }
 
-uint8_t device_write(device_t *dev, size_t start, size_t count, uint8_t *buf) {
+ssize_t device_write(device_t *dev, size_t start, size_t count, uint8_t *buf) {
   if (S_ISBLK(dev->type)) {
     if (start % dev->block_size) {
       uint8_t *nbuf = kmalloc(dev->block_size);

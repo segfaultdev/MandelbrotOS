@@ -117,7 +117,7 @@ int8_t ahci_find_cmdslot(hba_port_t *port) {
 }
 // End snippets
 
-uint8_t sata_read(device_t *dev, size_t start, size_t count, uint8_t *buf) {
+ssize_t sata_read(device_t *dev, size_t start, size_t count, uint8_t *buf) {
   uint32_t count32 = (uint32_t)count;
   uint64_t start64 = (uint64_t)start;
 
@@ -133,7 +133,7 @@ uint8_t sata_read(device_t *dev, size_t start, size_t count, uint8_t *buf) {
 
   int8_t slot = ahci_find_cmdslot(port);
   if (slot == -1)
-    return 1;
+    return 0;
 
   hba_cmd_header_t *cmd_header = (hba_cmd_header_t *)(uintptr_t)(port->clb);
   cmd_header += slot;
@@ -186,7 +186,7 @@ uint8_t sata_read(device_t *dev, size_t start, size_t count, uint8_t *buf) {
       break;
   }
   if ((port->tfd & (ATA_DEV_BUSY | ATA_DEV_DRQ)))
-    return 1;
+    return 0;
 
   port->ci = (1 << slot);
 
@@ -194,16 +194,16 @@ uint8_t sata_read(device_t *dev, size_t start, size_t count, uint8_t *buf) {
     if (!(port->ci & (1 << slot)))
       break;
     if (port->is & HBA_PXIS_TFES)
-      return 1;
+      return 0;
   }
 
   if (port->is & HBA_PXIS_TFES)
-    return 1;
+    return 0;
 
-  return 0;
+  return count * 512;
 }
 
-uint8_t sata_write(device_t *dev, size_t start, size_t count, uint8_t *buf) {
+ssize_t sata_write(device_t *dev, size_t start, size_t count, uint8_t *buf) {
   uint32_t count32 = (uint32_t)count;
   uint64_t start64 = (uint64_t)start;
 
@@ -219,7 +219,7 @@ uint8_t sata_write(device_t *dev, size_t start, size_t count, uint8_t *buf) {
 
   int8_t slot = ahci_find_cmdslot(port);
   if (slot == -1)
-    return 1;
+    return 0;
 
   hba_cmd_header_t *cmd_header = (hba_cmd_header_t *)(uintptr_t)(port->clb);
   cmd_header += slot;
@@ -274,7 +274,7 @@ uint8_t sata_write(device_t *dev, size_t start, size_t count, uint8_t *buf) {
       break;
   }
   if ((port->tfd & (ATA_DEV_BUSY | ATA_DEV_DRQ)))
-    return 1;
+    return 0;
 
   port->ci = (1 << slot);
 
@@ -282,13 +282,13 @@ uint8_t sata_write(device_t *dev, size_t start, size_t count, uint8_t *buf) {
     if (!(port->ci & (1 << slot)))
       break;
     if (port->is & HBA_PXIS_TFES)
-      return 1;
+      return 0;
   }
 
   if (port->is & HBA_PXIS_TFES)
-    return 1;
+    return 0;
 
-  return 0;
+  return count * 512;
 }
 
 void ahci_init_abars() {

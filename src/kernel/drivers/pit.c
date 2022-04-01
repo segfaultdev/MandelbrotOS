@@ -34,7 +34,7 @@ uint16_t pit_read_count() {
 
 int init_pit() {
   pit_phase(1000); // Phase to vibrate once every millisecond;
-  irq_install_handler(0, pit_handler);
-  ioapic_redirect_irq(madt_lapics.data[0]->apic_id, 2, 32, 1);
+  /* irq_install_handler(0, pit_handler); */
+  /* ioapic_redirect_irq(0, 0, 32, 1); */
   return 0;
 }

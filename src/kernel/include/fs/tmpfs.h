@@ -10,6 +10,9 @@ typedef struct tmpfs_dirent {
   fs_file_t *parent;
 } tmpfs_dirent_t;
 
+extern fs_ops_t tmpfs_fs_ops;
+extern file_ops_t tmpfs_file_ops;
+
 int init_tmpfs();
 
 #endif

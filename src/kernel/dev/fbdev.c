@@ -31,28 +31,25 @@ void *fb_mmap(device_t *dev, pagemap_t *pg, syscall_file_t *sfile, void *addr,
       .virt_addr = (uintptr_t)addr,
   };
 
-  printf("FB: prot %lu\r\n", prot & PROT_WRITE);
-
   vec_push(&pg->ranges, mmap_range);
 
   return (void *)vmm_virt_to_phys(&kernel_pagemap, (uintptr_t)framebuffer);
 }
 
-uint8_t fb_write(device_t *dev, size_t start, size_t count, uint8_t *buf) {
+ssize_t fb_write(device_t *dev, size_t start, size_t count, uint8_t *buf) {
   (void)start;
   (void)dev;
   (void)count;
   (void)buf;
-  return 1;
+  return 0;
 }
 
-uint8_t fb_read(device_t *dev, size_t start, size_t count, uint8_t *buf) {
+ssize_t fb_read(device_t *dev, size_t start, size_t count, uint8_t *buf) {
   (void)dev;
   (void)start;
   (void)count;
   (void)buf;
-  return 1; // TODO: Dya think it might be cool to maybe not just return 1 and
-            // like, read from the keyboard
+  return 0;
 }
 
 uint64_t fb_ioctl(device_t *dev, uint64_t cmd, void *arg) {
