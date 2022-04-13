@@ -6,18 +6,18 @@ AS = nasm
 
 CFLAGS := $(CFLAGS) \
 	-Isrc/include \
+	-I../../libc/src/include \
 	-ffreestanding \
 	-mno-red-zone \
 	-fno-pic -no-pie \
 	-static \
-	-w \
-	-g \
 
 ASFLAGS := $(ASFLAGS) \
-	-static -g \
+	-static \
 
 LDFLAGS := \
 	-Tlinker.ld \
+	-L../../../build/libc \
 
 CFILES := $(shell find src/ -name '*.c')
 ASFILES := $(shell find src/ -name '*.asm')
@@ -32,7 +32,7 @@ compile: ld
 	
 ld: $(OFILES)
 	@ echo "[LD] $^"
-	@ $(LD) $(LDFLAGS) $^ -o $(TARGET)
+	@ $(LD) $(LDFLAGS) $^ -lc -o $(TARGET)
 
 %.o: %.c
 	@ echo "[CC] $<"

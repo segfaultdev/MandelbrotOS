@@ -7,7 +7,10 @@ all: clean guard kernel prog $(HDD) qemu
 kernel:
 	@ cd src/kernel && make
 
-prog:
+libc:
+	@ cd src/libc && make
+
+prog: libc
 	@ cd src/prog && make
 
 qemu:
